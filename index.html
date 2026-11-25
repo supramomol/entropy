@@ -594,8 +594,11 @@ const Entropy = (() => {
 
   /* ---------- settings ---------- */
   const KEY = 'entropy.settings.v1';
-  const S = Object.assign({ mode: 'cpu', level: 'beginner', first: 'you', n: 3, p: 5, dev: false, hints: false,
+  const S = Object.assign({ mode: 'cpu', level: 'beginner', first: 'you', n: 2, p: 5, dev: false, hints: false,
     lang: /^fr/i.test(navigator.language || '') ? 'fr' : 'en', code: '', name: '', rec: '', peer: false }, load());
+  // The game used to open on 3 x 3. Settings saved in those days move to the new 2 x 2 start once;
+  // a board chosen after that is remembered as usual.
+  if (!S.start2) { S.n = 2; S.start2 = true; }
   function load() { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } }
   function save() { if (GUEST) return; try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* private window */ } }
   function limits() {
@@ -603,7 +606,7 @@ const Entropy = (() => {
     return { nMin: 2, nMax: 3, pMin: 4, pMax: S.n === 2 ? 11 : 5 };
   }
   function tidy() {
-    S.n = clamp(Math.round(+S.n) || 3, limits().nMin, limits().nMax);
+    S.n = clamp(Math.round(+S.n) || 2, limits().nMin, limits().nMax);
     S.p = clamp(Math.round(+S.p) || 4, limits().pMin, limits().pMax);
     if (!['cpu', 'two', 'net'].includes(S.mode)) S.mode = 'cpu';
     S.name = String(S.name || '').slice(0, 20);
@@ -1080,7 +1083,7 @@ const Entropy = (() => {
     net.role = 1; net.k = 0; net.sc = [0, 0]; net.code = GUEST.code;
     let rec = null; try { rec = JSON.parse(localStorage.getItem('entropy.guest.' + GUEST.code)); } catch (e) { rec = null; }
     const st = replay(rec);
-    if (st) adopt(rec, st); else { blank(3, 5, -1, 'wait'); render(); }
+    if (st) adopt(rec, st); else { blank(2, 5, -1, 'wait'); render(); }
     netStart(1, GUEST.code);
   }
   function showTrouble() {
