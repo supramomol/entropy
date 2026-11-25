@@ -42,7 +42,7 @@ header p { margin: 0; color: var(--muted); font-size: 14.5px; order: 3; flex: 1 
 .lab { display: block; width: 100%; color: var(--muted); font-size: 12.5px; margin-bottom: 1px; }
 .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
 .seg label { position: relative; cursor: pointer; }
-.seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.seg input { position: absolute; opacity: 0; top: 0; left: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
 .seg span { display: block; padding: 5px 12px; font-size: 14px; border-right: 1px solid var(--line); white-space: nowrap; }
 .seg label:last-child span { border-right: 0; }
 .seg input:checked + span { background: var(--ink); color: var(--bg); }
@@ -66,6 +66,9 @@ input[type=number] { width: 64px; }
 .guest .setup, .guest #new { display: none; }
 #trouble { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--b); }
 #board.waiting { opacity: .35; }
+@supports not (aspect-ratio: 1) { .cell::before { content: ""; display: block; padding-top: 100%; } }
+.cell, .num, .btn, .lang, .seg label { touch-action: manipulation; }
+
 [hidden] { display: none !important; }
 
 /* ---------- turn panel ---------- */
@@ -78,7 +81,7 @@ input[type=number] { width: 64px; }
 #status { margin: 0; min-height: 2.9em; display: flex; flex-direction: column; justify-content: center; font-size: 16.5px; }
 #status .how { display: block; color: var(--muted); font-size: 13.5px; }
 .pA { color: var(--a); } .pB { color: var(--b); }
-#status .m { display: inline-block; min-width: 1.5em; text-align: center; font-weight: 700; border-radius: 6px; padding: 0 5px; background: var(--ink); color: var(--bg); }
+#status .m { font-weight: 700; border-radius: 6px; padding: 0 .45em; background: var(--ink); color: var(--bg); }
 #calls { display: flex; gap: 8px; }
 .num { width: 50px; height: 50px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--card); color: var(--ink); font: 700 21px/1 system-ui, sans-serif; cursor: default; transition: transform .12s, background .15s, border-color .15s, opacity .15s; }
 .num.open { border-color: var(--ink); cursor: pointer; }
@@ -108,10 +111,10 @@ input[type=number] { width: 64px; }
 .cell.sel::after, .cell.tgt::after { content: attr(data-delta); position: absolute; left: calc(9% + var(--fs, 24px) * 1.5); top: 5%; font-weight: 700; font-size: calc(var(--fs, 24px) * .62); line-height: calc(var(--fs, 24px) * 1.1 / .62 * .62); color: var(--ok); }
 .cell.void { border-color: var(--win); box-shadow: 0 0 0 4px var(--win-soft); }
 .cell.void .count { color: var(--win); }
-#arrow { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+#arrow { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 #arrow.byA { color: var(--a); } #arrow.byB { color: var(--b); }
 #arrow text { font: 700 13px system-ui, sans-serif; fill: var(--card); }
-#fly { position: absolute; inset: 0; pointer-events: none; }
+#fly { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; }
 #fly i { position: absolute; }
 
 /* ---------- log and rules ---------- */
@@ -122,6 +125,15 @@ summary { cursor: pointer; font-weight: 600; font-size: 14.5px; }
 #log b { color: var(--ink); font-weight: 600; }
 .rules ol { margin: 8px 0 0; padding-left: 1.4em; font-size: 14.5px; }
 .rules li { margin: 4px 0; }
+/* ---------- phones ---------- */
+@media (max-width: 520px) {
+  h1 { font-size: 27px; }
+  .turn { grid-template-columns: 1fr; }
+  #status { min-height: 0; }
+  #calls { gap: 10px; margin-top: 2px; }
+  .num { width: 58px; height: 54px; }
+  .seg span { padding: 5px 9px; font-size: 13.5px; }
+}
 </style>
 </head>
 <body>
