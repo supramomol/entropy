@@ -1,0 +1,1312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entropy</title>
+<style>
+:root {
+  --bg: #f3f1ec; --card: #fffdf8; --ink: #20242b; --muted: #6c727c; --line: #d9d4c8;
+  --a: #2468d8; --b: #cf5325; --ok: #0d8f6f; --ok-soft: rgba(13,143,111,.22); --ok-tint: rgba(13,143,111,.10);
+  --win: #d99a00; --win-soft: rgba(217,154,0,.40);
+  --stone-hi: #8792a3; --stone: #323946;
+  --shadow: 0 1px 2px rgba(0,0,0,.05), 0 8px 22px rgba(0,0,0,.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a; --card: #1d2026; --ink: #e9e7e2; --muted: #98a0aa; --line: #363b45;
+    --a: #74a7ff; --b: #ff9263; --ok: #3fcfa9; --ok-soft: rgba(63,207,169,.28); --ok-tint: rgba(63,207,169,.12);
+    --win: #f2c044; --win-soft: rgba(242,192,68,.40);
+    --stone-hi: #ffffff; --stone: #a4acb8;
+    --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 620px; margin: 0 auto; padding: 22px 16px 56px; }
+header { display: flex; align-items: baseline; gap: 6px 14px; flex-wrap: wrap; margin-bottom: 14px; }
+h1 { font-size: 30px; line-height: 1; margin: 0; letter-spacing: .01em; }
+header p { margin: 0; color: var(--muted); font-size: 14.5px; order: 3; flex: 1 1 100%; }
+.top { order: 2; margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.lang { font: inherit; font-size: 13px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 3px 12px; cursor: pointer; }
+.lang:hover { color: var(--ink); border-color: var(--ink); }
+@media (min-width: 700px) { header p { order: 2; flex: 1 1 0; } .top { order: 3; } }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 14px 16px; margin-bottom: 14px; }
+
+/* ---------- layout and setup ---------- */
+.cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px 22px; }
+@media (min-width: 900px) { main { max-width: 1060px; } .cols { grid-template-columns: minmax(0, 1fr) 376px; align-items: start; } }
+.row { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 10px; padding: 6px 0; }
+.row.pair { gap: 5px 22px; align-items: flex-start; }
+.lab { display: block; width: 100%; color: var(--muted); font-size: 12.5px; margin-bottom: 1px; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.seg label { position: relative; cursor: pointer; }
+.seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.seg span { display: block; padding: 5px 12px; font-size: 14px; border-right: 1px solid var(--line); white-space: nowrap; }
+.seg label:last-child span { border-right: 0; }
+.seg input:checked + span { background: var(--ink); color: var(--bg); }
+.seg input:focus-visible + span { outline: 2px solid var(--a); outline-offset: -2px; }
+select, input[type=number] { font: inherit; font-size: 14px; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; }
+input[type=number] { width: 64px; }
+.btn { font: inherit; font-weight: 600; font-size: 14px; color: var(--bg); background: var(--ink); border: 0; border-radius: 9px; padding: 7px 14px; cursor: pointer; }
+.btn:hover { opacity: .88; }
+.check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.foot { justify-content: space-between; align-items: flex-start; padding-top: 12px; }
+.foot > span { display: inline-flex; flex-direction: column; gap: 5px; }
+.hint { width: 100%; margin: 2px 0 0; color: var(--muted); font-size: 12.5px; }
+.link { display: flex; gap: 6px; width: 100%; }
+.link input { flex: 1; min-width: 0; font: 12.5px ui-monospace, Menlo, monospace; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+.btn.small { padding: 5px 12px; }
+.name { display: flex; flex-direction: column; gap: 3px; width: 100%; margin-top: 6px; font-size: 12.5px; color: var(--muted); }
+.name input { font: inherit; font-size: 14px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; max-width: 220px; }
+.warn { color: var(--b); }
+#guestCard p { margin: 0 0 6px; }
+#guestCard p:last-child { margin: 0; color: var(--muted); font-size: 13.5px; }
+.guest .setup, .guest #new { display: none; }
+#trouble { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--b); }
+#board.waiting { opacity: .35; }
+[hidden] { display: none !important; }
+
+/* ---------- turn panel ---------- */
+.turn { display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; align-items: center; }
+.chips { grid-column: 1 / -1; display: flex; gap: 8px; font-size: 13px; }
+.chip { display: inline-flex; align-items: center; gap: 7px; padding: 2px 10px; border-radius: 999px; border: 1.5px solid var(--line); color: var(--muted); }
+.chip b { font-variant-numeric: tabular-nums; color: var(--ink); }
+.chip.on.pA { border-color: var(--a); color: var(--a); }
+.chip.on.pB { border-color: var(--b); color: var(--b); }
+#status { margin: 0; min-height: 2.9em; display: flex; flex-direction: column; justify-content: center; font-size: 16.5px; }
+#status .how { display: block; color: var(--muted); font-size: 13.5px; }
+.pA { color: var(--a); } .pB { color: var(--b); }
+#status .m { display: inline-block; min-width: 1.5em; text-align: center; font-weight: 700; border-radius: 6px; padding: 0 5px; background: var(--ink); color: var(--bg); }
+#calls { display: flex; gap: 8px; }
+.num { width: 50px; height: 50px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--card); color: var(--ink); font: 700 21px/1 system-ui, sans-serif; cursor: default; transition: transform .12s, background .15s, border-color .15s, opacity .15s; }
+.num.open { border-color: var(--ink); cursor: pointer; }
+.num.open:hover { background: var(--ink); color: var(--bg); transform: translateY(-1px); }
+.num.shut { opacity: .32; text-decoration: line-through; }
+.num.idle { opacity: .32; }
+.num.said { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.num:focus-visible, .cell:focus-visible, .btn:focus-visible, .lang:focus-visible { outline: 2px solid var(--a); outline-offset: 2px; }
+#again { grid-column: 1 / -1; justify-self: start; }
+#analysis { grid-column: 1 / -1; margin: 2px 0 0; font: 12.5px/1.4 ui-monospace, Menlo, monospace; color: var(--muted); }
+
+/* ---------- board ---------- */
+#boardBox { position: relative; width: min(100%, var(--W, 470px)); margin: 20px auto 22px; }
+#board { display: grid; grid-template-columns: repeat(var(--n, 3), 1fr); gap: var(--gap, 10px); }
+.cell { position: relative; aspect-ratio: 1; min-width: 0; padding: 0; border: 1.5px solid var(--line); border-radius: 14px; background: var(--card); color: inherit; font: inherit; cursor: default; box-shadow: var(--shadow); transition: border-color .15s, box-shadow .15s, background .15s, transform .12s; -webkit-tap-highlight-color: transparent; }
+.cell .count { position: absolute; left: 9%; top: 5%; font-weight: 700; font-size: var(--fs, 24px); line-height: 1.1; font-variant-numeric: tabular-nums; }
+.cell .coord { position: absolute; right: 8%; top: 7%; font-size: 11px; color: var(--muted); }
+.cell .stones { position: absolute; left: 9%; right: 9%; top: 31%; bottom: 9%; display: flex; flex-wrap: wrap-reverse; align-content: flex-start; padding: 0 var(--pad, 0px); }
+.stones i, #fly i { display: block; width: var(--d, 20px); height: var(--d, 20px); border-radius: 50%; background: radial-gradient(circle at 35% 30%, var(--stone-hi), var(--stone) 68%); border: calc(var(--d, 20px) * .07) solid transparent; background-clip: padding-box; }
+#board.plain .stones { display: none; }
+#board.plain .count { left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; }
+.cell.can { border-color: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); cursor: pointer; }
+.cell.can:hover { transform: translateY(-1px); background: var(--ok-tint); }
+.cell.sel { border-color: var(--ok); background: var(--ok-tint); box-shadow: 0 0 0 3px var(--ok); cursor: pointer; }
+.cell.tgt { border-color: var(--ok); border-style: dashed; box-shadow: 0 0 0 3px var(--ok-soft); cursor: pointer; }
+.cell.tgt:hover { background: var(--ok-tint); }
+.cell.sel::after, .cell.tgt::after { content: attr(data-delta); position: absolute; left: calc(9% + var(--fs, 24px) * 1.5); top: 5%; font-weight: 700; font-size: calc(var(--fs, 24px) * .62); line-height: calc(var(--fs, 24px) * 1.1 / .62 * .62); color: var(--ok); }
+.cell.void { border-color: var(--win); box-shadow: 0 0 0 4px var(--win-soft); }
+.cell.void .count { color: var(--win); }
+#arrow { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+#arrow.byA { color: var(--a); } #arrow.byB { color: var(--b); }
+#arrow text { font: 700 13px system-ui, sans-serif; fill: var(--card); }
+#fly { position: absolute; inset: 0; pointer-events: none; }
+#fly i { position: absolute; }
+
+/* ---------- log and rules ---------- */
+details { border-top: 1px solid var(--line); padding: 10px 2px; }
+summary { cursor: pointer; font-weight: 600; font-size: 14.5px; }
+#log { margin: 8px 0 0; padding-left: 2.2em; max-height: 190px; overflow: auto; font-size: 13.5px; color: var(--muted); }
+#log li { padding: 1px 0; }
+#log b { color: var(--ink); font-weight: 600; }
+.rules ol { margin: 8px 0 0; padding-left: 1.4em; font-size: 14.5px; }
+.rules li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 data-t="title">Entropy</h1>
+    <p data-t="tagline">Name a number. Your opponent moves that many stones. Empty a cell to win.</p>
+    <div class="top">
+      <button class="btn" id="new" type="button" data-t="newGame">New game</button>
+      <button class="lang" id="lang" type="button">Français</button>
+    </div>
+  </header>
+
+  <div class="cols">
+  <div class="play">
+  <section class="card turn" aria-live="polite">
+    <div class="chips"><span class="chip pA" id="chip0"></span><span class="chip pB" id="chip1"></span></div>
+    <p id="status"></p>
+    <div id="calls" role="group" data-ta="numbers" aria-label="Number of stones to move">
+      <button class="num" type="button" data-m="1">1</button>
+      <button class="num" type="button" data-m="2">2</button>
+      <button class="num" type="button" data-m="3">3</button>
+    </div>
+    <button class="btn" id="again" type="button" data-t="again" hidden>Play again</button>
+    <p id="trouble" hidden></p>
+    <p id="analysis" hidden></p>
+  </section>
+
+  <div id="boardBox">
+    <div id="board"></div>
+    <svg id="arrow" aria-hidden="true"></svg>
+    <div id="fly" aria-hidden="true"></div>
+  </div>
+
+  </div>
+  <aside>
+  <section class="card" id="guestCard" hidden><p id="guestWith"></p><p data-t="guestKeep"></p></section>
+  <section class="card setup" data-ta="setup" aria-label="Game setup">
+    <div class="row">
+      <span class="lab" data-t="players">Players</span>
+      <div class="seg" data-key="mode">
+        <label><input type="radio" name="mode" value="cpu"><span data-t="vsCpu">vs computer</span></label>
+        <label><input type="radio" name="mode" value="two"><span data-t="two">2 players</span></label>
+        <label><input type="radio" name="mode" value="net"><span data-t="online">Online</span></label>
+      </div>
+    </div>
+    <div class="row" id="rowNet" hidden>
+      <span class="lab" data-t="invite">Send this link to your opponent</span>
+      <div class="link"><input id="link" type="text" readonly data-ta="invite" aria-label="Send this link to your opponent"><button class="btn small" id="copy" type="button" data-t="copy">Copy</button></div>
+      <p class="hint" id="netHint"></p>
+      <p class="hint warn" id="localWarn" data-t="localWarn" hidden></p>
+      <label class="name"><span data-t="yourName">Your name, shown to your opponent (optional)</span><input id="myName" type="text" maxlength="20" autocomplete="off"></label>
+    </div>
+    <div class="row" id="rowLevel">
+      <span class="lab" data-t="computer">Computer</span>
+      <div class="seg" data-key="level">
+        <label><input type="radio" name="level" value="random"><span data-t="random">Random</span></label>
+        <label><input type="radio" name="level" value="beginner"><span data-t="beginner">Beginner</span></label>
+        <label><input type="radio" name="level" value="advanced"><span data-t="advanced">Advanced</span></label>
+        <label><input type="radio" name="level" value="expert"><span data-t="expert">Expert</span></label>
+      </div>
+      <p class="hint" id="levelHint"></p>
+    </div>
+    <div class="row" id="rowFirst">
+      <span class="lab" data-t="first">First number named by</span>
+      <div class="seg" data-key="first">
+        <label><input type="radio" name="first" value="you"><span data-t="you">You</span></label>
+        <label><input type="radio" name="first" value="cpu"><span id="firstOther">Computer</span></label>
+      </div>
+      <p class="hint" data-t="firstHint">Switches at every game.</p>
+    </div>
+    <div class="row pair">
+      <div>
+        <span class="lab" data-t="board">Board</span>
+        <div class="seg" data-key="n" id="segN">
+          <label><input type="radio" name="n" value="2"><span>2 × 2</span></label>
+          <label><input type="radio" name="n" value="3"><span>3 × 3</span></label>
+        </div>
+        <label id="devNLab" hidden><input type="number" id="devN" min="2" max="8" step="1" data-ta="size" aria-label="Board size n"> × n</label>
+      </div>
+      <div>
+        <span class="lab" data-t="stonesPer">Stones per cell</span>
+        <select id="selP" data-ta="stonesPer" aria-label="Stones per cell"></select>
+        <input type="number" id="devP" min="1" max="99" step="1" data-ta="stonesPer" aria-label="Stones per cell" hidden>
+      </div>
+    </div>
+    <div class="row foot">
+      <span>
+        <label class="check"><input type="checkbox" id="dev"> <span data-t="dev">Developer's mode</span></label>
+        <label class="check" id="hintsLab" hidden><input type="checkbox" id="hints"> <span data-t="verdicts">Show solver verdicts</span></label>
+      </span>
+    </div>
+  </section>
+
+  <details open>
+    <summary data-t="moves">Moves</summary>
+    <ol id="log"></ol>
+  </details>
+  <details class="rules">
+    <summary data-t="rules">Rules</summary>
+    <ol>
+      <li data-t="rule1">Every cell of the board starts with the same number of stones.</li>
+      <li data-t="rule2">One player names a number: 1, 2 or 3. It has to be a number of stones that can actually be moved.</li>
+      <li data-t="rule3">The other player moves exactly that many stones from one cell to a cell next to it (up, down, left or right). The cell receiving the stones must hold at least as many stones as the cell giving them.</li>
+      <li data-t="rule4">The player who just moved names the next number, and so on.</li>
+      <li data-t="rule5">Whoever empties a cell wins.</li>
+    </ol>
+  </details>
+  </aside>
+  </div>
+</main>
+
+<script id="engine">
+/* Entropy: rules and computer players. No DOM in this block. */
+const Entropy = (() => {
+  'use strict';
+  const MAXM = 3;
+  const cfg = {
+    advancedDepth: 3,        // how many turns ahead "Advanced" looks
+    thinkMs: 1500,           // time allowance when a search cannot be exhaustive
+    denseLimit: 2.4e8,       // largest number of positions solved exhaustively (2 bits each)
+    random: Math.random
+  };
+  const TIMEOUT = { timeout: true };
+
+  function geometry(n) {
+    const N = n * n, src = [], dst = [];
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+      const i = r * n + c;
+      if (c + 1 < n) { src.push(i, i + 1); dst.push(i + 1, i); }
+      if (r + 1 < n) { src.push(i, i + n); dst.push(i + n, i); }
+    }
+    const maps = [
+      (r, c) => [r, c], (r, c) => [c, n - 1 - r], (r, c) => [n - 1 - r, n - 1 - c], (r, c) => [n - 1 - c, r],
+      (r, c) => [r, n - 1 - c], (r, c) => [n - 1 - r, c], (r, c) => [c, r], (r, c) => [n - 1 - c, n - 1 - r]];
+    const perms = maps.map(f => {
+      const p = new Int32Array(N);
+      for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) { const q = f(r, c); p[r * n + c] = q[0] * n + q[1]; }
+      return p;
+    });
+    return { n, N, E: src.length, es: Int32Array.from(src), et: Int32Array.from(dst), perms };
+  }
+
+  // A move takes m stones from s to a neighbour t that holds at least as many stones as s.
+  function legalMoves(g, b, m) {
+    const out = [];
+    for (let e = 0; e < g.E; e++) { const s = b[g.es[e]]; if (s >= m && b[g.et[e]] >= s) out.push([g.es[e], g.et[e]]); }
+    return out;
+  }
+  function canMove(g, b, m) {
+    for (let e = 0; e < g.E; e++) { const s = b[g.es[e]]; if (s >= m && b[g.et[e]] >= s) return true; }
+    return false;
+  }
+  function pickRandom(a) { return a[Math.floor(cfg.random() * a.length)]; }
+
+  function brain(g, total) {
+    const N = g.N, E = g.E, es = g.es, et = g.et, perms = g.perms, S = total - N;
+    // Number of positions with no empty cell: C(total - 1, N - 1).
+    let positions = 1;
+    { const a = total - 1, k = Math.min(N - 1, S); for (let i = 1; i <= k && positions <= cfg.denseLimit; i++) positions = positions * (a - k + i) / i; }
+    const exact = positions <= cfg.denseLimit;
+    let ready = false, table = null, cum = null, W1 = S + 1, map = null;
+    let useMemo = false, deadline = Infinity, nodes = 0;
+
+    function init() {
+      if (ready) return; ready = true;
+      if (!exact) { map = new Map(); return; }
+      // comp[k][s]: ways to share s extra stones among k cells; cum gives the rank of a position.
+      const comp = [];
+      for (let k = 0; k <= N; k++) {
+        const row = new Float64Array(S + 1);
+        for (let s = 0; s <= S; s++) row[s] = k === 0 ? (s === 0 ? 1 : 0) : (s === 0 ? 1 : row[s - 1] + comp[k - 1][s]);
+        comp.push(row);
+      }
+      cum = new Float64Array(Math.max(1, (N - 1) * W1 * W1));
+      for (let i = 0; i < N - 1; i++) for (let r = 0; r <= S; r++) {
+        let a = 0;
+        for (let c = 0; c <= r; c++) { cum[(i * W1 + r) * W1 + c] = a; a += comp[N - i - 1][r - c]; }
+      }
+      table = new Uint8Array(Math.ceil(comp[N][S] / 4) + 1);
+    }
+    function keyOf(b) {
+      if (!exact) return String.fromCharCode.apply(null, b);
+      let best = Infinity;                        // smallest rank among the 8 mirror images
+      for (let p = 0; p < 8; p++) {
+        const pm = perms[p]; let r = S, k = 0;
+        for (let i = 0; i < N - 1; i++) { const c = b[pm[i]] - 1; k += cum[(i * W1 + r) * W1 + c]; r -= c; }
+        if (k < best) best = k;
+      }
+      return best;
+    }
+    function memoGet(k) { return exact ? (table[k >>> 2] >>> ((k & 3) << 1)) & 3 : (map.get(k) || 0); }
+    function memoPut(k, v) {
+      if (exact) table[k >>> 2] |= v << ((k & 3) << 1);
+      else { if (map.size > 1e6) map.clear(); map.set(k, v); }
+    }
+
+    // Exhaustive search: does the player about to NAME a number on board b win?
+    // Every position is solved once and stored; replies from the poorest cells are tried first
+    // because they refute a number most often.
+    let stE = new Int32Array(4096), stK = new Float64Array(4096), top = 0;
+    function solve(b) {
+      const k = keyOf(b), known = memoGet(k);
+      if (known) return known === 1;
+      nodes++;
+      const base = top;
+      if (base + E > stE.length) { const a = new Int32Array(stE.length * 2 + E), c = new Float64Array(a.length); a.set(stE); c.set(stK); stE = a; stK = c; }
+      let result = false;
+      for (let m = MAXM; m >= 1 && !result; m--) {
+        let cnt = 0, bad = false;
+        for (let e = 0; e < E; e++) {
+          const s = b[es[e]];
+          if (s >= m && b[et[e]] >= s) { if (s === m) { bad = true; break; } stE[base + cnt++] = e; }
+        }
+        if (!cnt || bad) continue;                  // not possible, or the opponent empties a cell
+        for (let i = 1; i < cnt; i++) {             // insertion sort by stones in the giving cell
+          const e = stE[base + i], s = b[es[e]]; let j = i - 1;
+          while (j >= 0 && b[es[stE[base + j]]] > s) { stE[base + j + 1] = stE[base + j]; j--; }
+          stE[base + j + 1] = e;
+        }
+        let ok = true;
+        for (let i = 0; i < cnt; i++) {             // a reply already known to win refutes m at once
+          const e = stE[base + i], si = es[e], ti = et[e];
+          b[si] -= m; b[ti] += m; const ck = keyOf(b); b[si] += m; b[ti] -= m;
+          if (memoGet(ck) === 1) { ok = false; break; }
+          stK[base + i] = ck;
+        }
+        if (!ok) continue;
+        top = base + cnt;
+        for (let i = 0; i < cnt; i++) {
+          if (memoGet(stK[base + i]) === 2) continue;
+          const e = stE[base + i], si = es[e], ti = et[e];
+          b[si] -= m; b[ti] += m; const w = solve(b); b[si] += m; b[ti] -= m;
+          if (w) { ok = false; break; }
+        }
+        top = base;
+        if (ok) result = true;
+      }
+      memoPut(k, result ? 1 : 2);
+      return result;
+    }
+
+    // Outcome for the player about to NAME a number on board b, looking d turns ahead:
+    // +1 wins, -1 loses, 0 not settled within d turns. With d = Infinity the answer is exact.
+    function value(b, d) {
+      if (d === Infinity && exact && useMemo) return solve(b) ? 1 : -1;
+      let k = 0;
+      if (useMemo) { k = keyOf(b); const v = memoGet(k); if (v) return v === 1 ? 1 : -1; }
+      if ((++nodes & 1023) === 0 && Date.now() > deadline) throw TIMEOUT;
+      let best = -1;
+      for (let m = MAXM; m >= 1; m--) {
+        let any = false, bad = false;
+        for (let e = 0; e < E; e++) {
+          const s = b[es[e]];
+          if (s >= m && b[et[e]] >= s) { any = true; if (s === m) { bad = true; break; } }   // opponent empties a cell
+        }
+        if (!any || bad) continue;
+        let worst = 1;
+        if (useMemo) {                             // a reply already known to win refutes m at once
+          for (let e = 0; e < E; e++) {
+            const si = es[e], ti = et[e], s = b[si];
+            if (s >= m && b[ti] >= s) {
+              b[si] -= m; b[ti] += m; const q = memoGet(keyOf(b)); b[si] += m; b[ti] -= m;
+              if (q === 1) { worst = -1; break; }
+            }
+          }
+        }
+        if (worst === 1) for (let e = 0; e < E; e++) {
+          const si = es[e], ti = et[e], s = b[si];
+          if (s >= m && b[ti] >= s) {
+            let v = 0;
+            b[si] -= m; b[ti] += m;
+            if (d > 0) v = -value(b, d - 1);
+            else if (useMemo) { const q = memoGet(keyOf(b)); v = q === 1 ? -1 : q === 2 ? 1 : 0; }
+            b[si] += m; b[ti] -= m;
+            if (v < worst) { worst = v; if (worst === -1) break; }
+          }
+        }
+        if (worst > best) { best = worst; if (best === 1) break; }
+      }
+      if (useMemo && best !== 0) memoPut(k, best === 1 ? 1 : 2);
+      return best;
+    }
+    function childVal(b, d) { return d < 0 ? 0 : value(b, d); }
+
+    // What naming m is worth to the player who names it.
+    function callValue(b, m, d) {
+      for (let e = 0; e < E; e++) { const s = b[es[e]]; if (s === m && b[et[e]] >= s) return -1; }
+      let worst = 1;
+      for (let e = 0; e < E; e++) {
+        const si = es[e], ti = et[e], s = b[si];
+        if (s >= m && b[ti] >= s) {
+          b[si] -= m; b[ti] += m; const v = -childVal(b, d - 1); b[si] += m; b[ti] -= m;
+          if (v < worst) { worst = v; if (worst === -1) break; }
+        }
+      }
+      return worst;
+    }
+    // Share of the opponent's moves that would be mistakes after naming m (for choosing among lost causes).
+    function callTrap(b, m, d) {
+      for (let e = 0; e < E; e++) { const s = b[es[e]]; if (s === m && b[et[e]] >= s) return 0; }
+      let sum = 0, cnt = 0;
+      for (let e = 0; e < E; e++) {
+        const si = es[e], ti = et[e], s = b[si];
+        if (s >= m && b[ti] >= s) {
+          b[si] -= m; b[ti] += m; const v = -childVal(b, d - 1); b[si] += m; b[ti] -= m;
+          sum += (v + 1) / 2; cnt++;
+        }
+      }
+      return cnt ? sum / cnt : 0;
+    }
+
+    function think(level, evalAt) {
+      let depths, timed = false; useMemo = false;
+      if (level === 'beginner') depths = [0];
+      else if (level === 'advanced') { depths = []; for (let d = 0; d <= cfg.advancedDepth; d++) depths.push(d); timed = true; }
+      else {
+        init(); useMemo = true;
+        if (exact) depths = [Infinity];
+        else { depths = []; for (let d = 0; d <= 80; d++) depths.push(d); timed = true; }
+      }
+      deadline = timed ? Date.now() + cfg.thinkMs : Infinity; top = 0;
+      let out = null;
+      try {
+        for (const d of depths) {
+          const opts = evalAt(d);
+          out = { opts, depth: d, exact: exact && level === 'expert' };
+          if (opts.some(o => o.v === 1) || opts.every(o => o.v !== 0)) break;
+        }
+      } catch (err) { if (err !== TIMEOUT) throw err; }
+      deadline = Infinity;
+      return out;
+    }
+    function rateCalls(b, level) {
+      return think(level, d => {
+        const w = b.slice(), opts = [];
+        for (let m = 1; m <= MAXM; m++) if (canMove(g, w, m)) opts.push({ m, v: callValue(w, m, d) });
+        return opts;
+      });
+    }
+    function rateMoves(b, m, level) {
+      return think(level, d => {
+        const w = b.slice();
+        return legalMoves(g, w, m).map(mv => {
+          const s = mv[0], t = mv[1];
+          if (w[s] === m) return { s, t, v: 1, now: true };
+          w[s] -= m; w[t] += m; const v = childVal(w, d); w[s] += m; w[t] -= m;
+          return { s, t, v };
+        });
+      });
+    }
+    function bestOf(opts) { let top = -2; for (const o of opts) if (o.v > top) top = o.v; return opts.filter(o => o.v === top); }
+    function trappiest(pool, f) {
+      useMemo = true; deadline = exact ? Infinity : Date.now() + 400; top = 0;
+      try {
+        let top = -1, out = [];
+        for (const o of pool) { const t = f(o); if (t > top + 1e-9) { top = t; out = [o]; } else if (t > top - 1e-9) out.push(o); }
+        return out;
+      } catch (err) { if (err !== TIMEOUT) throw err; return pool; }
+      finally { deadline = Infinity; }
+    }
+
+    function shuffled(a) {
+      for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(cfg.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; }
+      return a;
+    }
+    function chooseCall(b, level) {
+      const ms = []; for (let m = 1; m <= MAXM; m++) if (canMove(g, b, m)) ms.push(m);
+      if (level === 'random') return pickRandom(ms);
+      if (level === 'expert' && exact) {           // perfect play: the first number found to win is enough
+        init(); useMemo = true; deadline = Infinity; top = 0;
+        const w = b.slice();
+        for (let m = MAXM; m >= 1; m--) if (canMove(g, w, m) && callValue(w, m, Infinity) === 1) return m;
+      }
+      const r = rateCalls(b, level);
+      if (!r) return pickRandom(ms);
+      let pool = bestOf(r.opts);
+      if (level === 'expert' && pool[0].v < 1 && pool.length > 1) pool = trappiest(pool, o => callTrap(b.slice(), o.m, r.depth));
+      return pickRandom(pool).m;
+    }
+    function chooseMove(b, m, level) {
+      const mv = legalMoves(g, b, m);
+      if (level === 'random') return pickRandom(mv);
+      const now = mv.filter(x => b[x[0]] === m);   // emptying a cell wins on the spot
+      if (now.length) return pickRandom(now);
+      if (level === 'expert' && exact) {           // perfect play: the first move found to win is enough
+        init(); useMemo = true; deadline = Infinity; top = 0;
+        const w = b.slice(), seen = [];
+        for (const x of mv) { w[x[0]] -= m; w[x[1]] += m; if (memoGet(keyOf(w)) === 1) seen.push(x); w[x[0]] += m; w[x[1]] -= m; }
+        if (seen.length) return pickRandom(seen);   // already worked out
+        for (const x of shuffled(mv.slice())) {
+          w[x[0]] -= m; w[x[1]] += m; const v = value(w, Infinity); w[x[0]] += m; w[x[1]] -= m;
+          if (v === 1) return x;
+        }
+      }
+      const r = rateMoves(b, m, level);
+      if (!r) return pickRandom(mv);
+      let pool = bestOf(r.opts);
+      if (level === 'expert' && pool[0].v < 1 && pool.length > 1) {
+        pool = trappiest(pool, o => {
+          const w = b.slice(); w[o.s] -= m; w[o.t] += m;
+          let top = 0;
+          for (let k = 1; k <= MAXM; k++) if (canMove(g, w, k)) top = Math.max(top, callTrap(w, k, r.depth));
+          return top;
+        });
+      }
+      const o = pickRandom(pool);
+      return [o.s, o.t];
+    }
+
+    return {
+      exact, chooseCall, chooseMove,
+      analyseCalls: b => rateCalls(b, 'expert'),
+      analyseMoves: (b, m) => rateMoves(b, m, 'expert'),
+      nodes: () => nodes
+    };
+  }
+
+  // One entry point for all computer decisions, so they can run in a background thread.
+  // Solved boards are kept (a few of them) so that a board is only ever worked out once.
+  const kept = new Map();
+  let big = null, bigKey = '';
+  function serve(q) {
+    const key = q.n + ':' + q.total;
+    let served = kept.get(key) || (key === bigKey ? big : null);
+    if (!served) {
+      served = brain(geometry(q.n), q.total);
+      if (served.exact) { if (kept.size >= 4) kept.delete(kept.keys().next().value); kept.set(key, served); }
+      else { big = served; bigKey = key; }
+    }
+    if (q.op === 'call') return served.chooseCall(q.board, q.level);
+    if (q.op === 'move') return served.chooseMove(q.board, q.m, q.level);
+    if (q.op === 'calls') return served.analyseCalls(q.board);
+    return served.analyseMoves(q.board, q.m);
+  }
+
+  return { MAXM, cfg, geometry, legalMoves, canMove, brain, serve };
+})();
+</script>
+
+<script>
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const reduced = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  // Someone who opens an invitation link (…#j=code) is the guest of an online game and sees nothing else.
+  const GUEST = (() => {
+    const h = new URLSearchParams(location.hash.slice(1)), code = h.get('j') || '';
+    if (!/^[a-z0-9]{10,40}$/.test(code)) return null;
+    return { code, name: (h.get('n') || '').trim().slice(0, 20), lang: h.get('l') };
+  })();
+
+  /* ---------- settings ---------- */
+  const KEY = 'entropy.settings.v1';
+  const S = Object.assign({ mode: 'cpu', level: 'beginner', first: 'you', n: 3, p: 5, dev: false, hints: false,
+    lang: /^fr/i.test(navigator.language || '') ? 'fr' : 'en', code: '', name: '', rec: '', peer: false }, load());
+  function load() { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } }
+  function save() { if (GUEST) return; try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* private window */ } }
+  function limits() {
+    if (S.dev) return { nMin: 2, nMax: 8, pMin: 1, pMax: 99 };
+    return { nMin: 2, nMax: 3, pMin: 4, pMax: S.n === 2 ? 11 : 5 };
+  }
+  function tidy() {
+    S.n = clamp(Math.round(+S.n) || 3, limits().nMin, limits().nMax);
+    S.p = clamp(Math.round(+S.p) || 4, limits().pMin, limits().pMax);
+    if (!['cpu', 'two', 'net'].includes(S.mode)) S.mode = 'cpu';
+    S.name = String(S.name || '').slice(0, 20);
+    if (!['random', 'beginner', 'advanced', 'expert'].includes(S.level)) S.level = 'beginner';
+    if (!['you', 'cpu'].includes(S.first)) S.first = 'you';
+    if (!['en', 'fr'].includes(S.lang)) S.lang = 'en';
+  }
+
+  /* ---------- English / French ---------- */
+  // Plain strings fill the page (data-t / data-ta attributes); functions build the sentences of a game.
+  // a, b: player names already wrapped in colour; c: a cell such as b2; n: the number named, in its badge.
+  const TEXT = {
+    en: {
+      title: 'Entropy', tagline: 'Name a number. Your opponent moves that many stones. Empty a cell to win.', other: 'Français',
+      players: 'Players', vsCpu: 'vs computer', two: '2 players', online: 'Online',
+      invite: 'Send this link to your opponent', copy: 'Copy', copied: 'Copied',
+      netWaiting: 'Waiting for your opponent to open the link…',
+      netJoined: 'Your opponent has opened the link. The same link works every time.',
+      yourName: 'Your name, shown to your opponent (optional)',
+      localWarn: 'This page is open from your own computer, so the link will not work for anyone else yet. The game first has to be put on the web.',
+      opp: 'Opponent', oppSubj: 'Your opponent', oppMid: 'your opponent',
+      guestWith: o => 'Online game with ' + o + '.',
+      guestKeep: 'Keep this page open while you play. The same link always brings you back to the game.',
+      netYourCall: o => '<b class="pA">Your call</b>: how many stones must ' + o + ' move?',
+      netTheirCall: o => o + ' is choosing your number…',
+      netYourMove: (o, n) => o + ' says ' + n + '. <b class="pA">Your move</b>.',
+      netTheirMove: (o, n) => 'You said ' + n + '. Waiting for ' + o + ' to move…',
+      netConnecting: 'Connecting to the game…',
+      netNoGame: o => 'The game has not started yet. It will begin as soon as ' + o + ' is online.',
+      netTrouble: 'Connection lost. Trying again…',
+      computer: 'Computer', random: 'Random', beginner: 'Beginner', advanced: 'Advanced', expert: 'Expert',
+      first: 'First number named by', you: 'You', theCpu: 'Computer', firstHint: 'Switches at every game.',
+      board: 'Board', stonesPer: 'Stones per cell', newGame: 'New game', dev: "Developer's mode", verdicts: 'Show solver verdicts',
+      again: 'Play again', moves: 'Moves', rules: 'Rules', setup: 'Game setup', numbers: 'Number of stones to move', size: 'Board size n',
+      rule1: 'Every cell of the board starts with the same number of stones.',
+      rule2: 'One player names a number: 1, 2 or 3. It has to be a number of stones that can actually be moved.',
+      rule3: 'The other player moves exactly that many stones from one cell to a cell next to it (up, down, left or right). The cell receiving the stones must hold at least as many stones as the cell giving them.',
+      rule4: 'The player who just moved names the next number, and so on.',
+      rule5: 'Whoever empties a cell wins.',
+      hRandom: 'Picks any legal number and any legal move.',
+      hBeginner: 'Takes a win when it sees one and tries not to hand you one.',
+      hAdvanced: 'Looks a few turns ahead.',
+      hExpert: 'Has solved the game: never misses a win.',
+      hExpertBig: 'This board is too large to solve outright: searches as deep as it can in the time it has.',
+      names2: ['Player A', 'Player B'], names1: ['You', 'Computer'],
+      stones: m => m + (m === 1 ? ' stone' : ' stones'),
+      wins2: (a, c) => a + ' wins: cell ' + c + ' is empty.',
+      cpuWins: c => '<b class="pB">The computer wins</b>: it emptied cell ' + c + '.',
+      youWin: c => '<b class="pA">You win!</b> You emptied cell ' + c + '.',
+      wait: 'Working this board out from scratch. It only takes this long once.',
+      call2: (a, b) => a + ', name a number: how many stones must ' + b + ' move?',
+      cpuCalls: 'The computer is choosing your number…',
+      yourCall: '<b class="pA">Your call</b>: how many stones must the computer move?',
+      pick1: 'Pick a cell, then a neighbouring cell holding at least as many stones.',
+      pick2: 'Now pick the neighbouring cell they go to.',
+      move2: (a, n, m) => a + ', move ' + n + (m === 1 ? ' stone.' : ' stones.'),
+      cpuMoves: n => 'You said ' + n + '. The computer is moving…',
+      yourMove: n => 'The computer says ' + n + '. <b class="pA">Your move</b>.',
+      cannot: m => 'No cell can give ' + m + (m === 1 ? ' stone' : ' stones') + ' to a neighbour holding at least as many',
+      cell: (c, k) => 'Cell ' + c + ', ' + k + (k === 1 ? ' stone' : ' stones'),
+      logLine: (x, who) => '<b>' + who(x.caller).name + '</b> said ' + x.m + ' · <b>' + who(1 - x.caller).name + '</b> moved ' + x.from + ' → ' + x.to + (x.won ? ' · <b>cell emptied</b>' : ''),
+      sThinking: 'Solver: thinking…', sNone: 'Solver: no result',
+      sCalls: opts => 'Solver: ' + opts.map(o => 'naming ' + o.m + (o.v > 0 ? ' wins' : o.v < 0 ? ' loses' : ' unsettled')).join(' · '),
+      sMoves: (n, win, lose, open) => 'Solver: ' + n + ' legal moves · winning: ' + (win || 'none') + ' · losing: ' + (lose || 'none') + (open ? ' · unsettled: ' + open : ''),
+      sTail: d => '  [board too large to solve: looked ' + d + (d === 1 ? ' turn' : ' turns') + ' ahead]'
+    },
+    fr: {
+      title: 'Entropie', tagline: 'Annoncez un nombre. Votre adversaire déplace autant de pierres. Videz une case pour gagner.', other: 'English',
+      players: 'Joueurs', vsCpu: 'Contre l’ordinateur', two: '2 joueurs', online: 'En ligne',
+      invite: 'Envoyez ce lien à votre adversaire', copy: 'Copier', copied: 'Copié',
+      netWaiting: 'En attente : votre adversaire n’a pas encore ouvert le lien…',
+      netJoined: 'Votre adversaire a ouvert le lien. Le même lien fonctionne à chaque fois.',
+      yourName: 'Votre nom, affiché chez votre adversaire (facultatif)',
+      localWarn: 'Cette page est ouverte depuis votre ordinateur : le lien ne fonctionnera pas encore pour quelqu’un d’autre. Le jeu doit d’abord être mis en ligne.',
+      opp: 'Adversaire', oppSubj: 'Votre adversaire', oppMid: 'votre adversaire',
+      guestWith: o => 'Partie en ligne avec ' + o + '.',
+      guestKeep: 'Gardez cette page ouverte pendant la partie. Le même lien vous ramène toujours à la partie.',
+      que: o => (/^(<[^>]*>)?[aeiouyhàâäéèêëîïôöùûü]/i.test(o) ? 'qu\u2019' : 'que ') + o,
+      netYourCall(o) { return '<b class="pA">À vous d\u2019annoncer</b> le nombre de pierres ' + this.que(o) + ' devra déplacer.'; },
+      netTheirCall: o => o + ' choisit votre nombre…',
+      netYourMove: (o, n) => o + ' annonce ' + n + '. <b class="pA">À vous de jouer</b>.',
+      netTheirMove: (o, n) => 'Vous avez annoncé ' + n + '. C’est à ' + o + ' de jouer…',
+      netConnecting: 'Connexion à la partie…',
+      netNoGame(o) { return 'La partie n\u2019a pas encore commencé. Elle démarrera dès ' + this.que(o) + ' sera en ligne.'; },
+      netTrouble: 'Connexion perdue. Nouvelle tentative…',
+      computer: 'Ordinateur', random: 'Aléatoire', beginner: 'Débutant', advanced: 'Avancé', expert: 'Expert',
+      first: 'Premier nombre annoncé par', you: 'Vous', theCpu: 'L\u2019ordinateur', firstHint: 'Alterne à chaque partie.',
+      board: 'Plateau', stonesPer: 'Pierres par case', newGame: 'Nouvelle partie', dev: 'Mode développeur', verdicts: 'Afficher les verdicts du solveur',
+      again: 'Rejouer', moves: 'Coups', rules: 'Règles', setup: 'Réglages de la partie', numbers: 'Nombre de pierres à déplacer', size: 'Taille n du plateau',
+      rule1: 'Au départ, chaque case du plateau contient le même nombre de pierres.',
+      rule2: 'Un joueur annonce un nombre\u00a0: 1, 2 ou 3. Ce doit être un nombre de pierres qu\u2019il est réellement possible de déplacer.',
+      rule3: 'L\u2019autre joueur déplace exactement ce nombre de pierres d\u2019une case vers une case voisine (en haut, en bas, à gauche ou à droite). La case qui reçoit les pierres doit en contenir au moins autant que la case qui les donne.',
+      rule4: 'Le joueur qui vient de déplacer les pierres annonce le nombre suivant, et ainsi de suite.',
+      rule5: 'Celui qui vide une case gagne.',
+      hRandom: 'Choisit au hasard un nombre possible et un coup permis.',
+      hBeginner: 'Saisit une victoire quand il en voit une et tâche de ne pas vous en offrir.',
+      hAdvanced: 'Calcule quelques tours à l\u2019avance.',
+      hExpert: 'A résolu le jeu\u00a0: ne laisse jamais passer une victoire.',
+      hExpertBig: 'Ce plateau est trop grand pour être résolu\u00a0: il cherche aussi loin que possible dans le temps dont il dispose.',
+      names2: ['Joueur A', 'Joueur B'], names1: ['Vous', 'Ordinateur'],
+      stones: m => m + (m === 1 ? ' pierre' : ' pierres'),
+      wins2: (a, c) => a + ' gagne\u00a0: la case ' + c + ' est vide.',
+      cpuWins: c => '<b class="pB">L\u2019ordinateur gagne</b>\u00a0: il a vidé la case ' + c + '.',
+      youWin: c => '<b class="pA">Vous gagnez\u00a0!</b> Vous avez vidé la case ' + c + '.',
+      wait: 'Analyse complète de ce plateau en cours. Cette attente n\u2019a lieu qu\u2019une fois.',
+      call2: (a, b) => a + ', annoncez un nombre\u00a0: combien de pierres ' + b + ' doit-il déplacer\u00a0?',
+      cpuCalls: 'L\u2019ordinateur choisit votre nombre…',
+      yourCall: '<b class="pA">À vous d\u2019annoncer</b>\u00a0: combien de pierres l\u2019ordinateur doit-il déplacer\u00a0?',
+      pick1: 'Choisissez une case, puis une case voisine contenant au moins autant de pierres.',
+      pick2: 'Choisissez maintenant la case voisine d\u2019arrivée.',
+      move2: (a, n, m) => a + ', déplacez ' + n + (m === 1 ? ' pierre.' : ' pierres.'),
+      cpuMoves: n => 'Vous avez annoncé ' + n + '. L\u2019ordinateur joue…',
+      yourMove: n => 'L\u2019ordinateur annonce ' + n + '. <b class="pA">À vous de jouer</b>.',
+      cannot: m => 'Aucune case ne peut donner ' + m + (m === 1 ? ' pierre' : ' pierres') + ' à une voisine qui en contient au moins autant',
+      cell: (c, k) => 'Case ' + c + ', ' + k + (k === 1 ? ' pierre' : ' pierres'),
+      logLine: (x, who) => {
+        const a = who(x.caller), b = who(1 - x.caller), subj = w => w.cpu ? 'L\u2019ordinateur' : w.name, aux = w => w.you ? ' avez ' : ' a ';
+        return '<b>' + subj(a) + '</b>' + aux(a) + 'annoncé ' + x.m + ' · <b>' + subj(b) + '</b>' + aux(b) + 'déplacé ' + x.from + ' → ' + x.to + (x.won ? ' · <b>case vidée</b>' : '');
+      },
+      sThinking: 'Solveur\u00a0: calcul…', sNone: 'Solveur\u00a0: aucun résultat',
+      sCalls: opts => 'Solveur\u00a0: ' + opts.map(o => 'annoncer ' + o.m + (o.v > 0 ? ' gagne' : o.v < 0 ? ' perd' : ' reste indécis')).join(' · '),
+      sMoves: (n, win, lose, open) => 'Solveur\u00a0: ' + n + ' coups permis · gagnants\u00a0: ' + (win || 'aucun') + ' · perdants\u00a0: ' + (lose || 'aucun') + (open ? ' · indécis\u00a0: ' + open : ''),
+      sTail: d => '  [plateau trop grand pour être résolu\u00a0: ' + d + (d === 1 ? ' tour' : ' tours') + ' d\u2019avance]'
+    }
+  };
+  let L = TEXT.en;
+  function applyLang() {
+    L = TEXT[S.lang];
+    document.documentElement.lang = S.lang;
+    document.title = L.title;
+    for (const el of document.querySelectorAll('[data-t]')) el.textContent = L[el.dataset.t];
+    for (const el of document.querySelectorAll('[data-ta]')) el.setAttribute('aria-label', L[el.dataset.ta]);
+    const btn = $('lang'), other = S.lang === 'en' ? 'fr' : 'en';
+    btn.textContent = L.other; btn.lang = other;
+  }
+  function syncControls() {
+    for (const seg of document.querySelectorAll('.seg')) {
+      const key = seg.dataset.key;
+      for (const inp of seg.querySelectorAll('input')) inp.checked = String(S[key]) === inp.value;
+    }
+    const cpu = S.mode === 'cpu', host = S.mode === 'net' && !GUEST, lim = limits();
+    $('rowLevel').hidden = !cpu; $('rowFirst').hidden = !(cpu || host);
+    $('firstOther').textContent = host ? L.opp : L.theCpu;
+    $('rowNet').hidden = !host;
+    if (host) {
+      $('link').value = inviteLink();
+      if (document.activeElement !== $('myName')) $('myName').value = S.name;
+      $('netHint').textContent = S.peer ? L.netJoined : L.netWaiting;
+      $('localWarn').hidden = !LOCAL;
+    }
+    document.body.classList.toggle('guest', !!GUEST);
+    $('guestCard').hidden = !GUEST;
+    if (GUEST) $('guestWith').innerHTML = L.guestWith(GUEST.name ? '<b>' + esc(GUEST.name) + '</b>' : L.oppMid);
+    $('segN').hidden = S.dev; $('devNLab').hidden = !S.dev;
+    $('selP').hidden = S.dev; $('devP').hidden = !S.dev; $('hintsLab').hidden = !S.dev;
+    $('devN').value = S.n; $('devP').value = S.p;
+    $('dev').checked = S.dev; $('hints').checked = S.hints;
+    const sel = $('selP'); sel.textContent = '';
+    for (let p = lim.pMin; p <= Math.min(lim.pMax, 11); p++) { const o = document.createElement('option'); o.value = p; o.textContent = p; sel.appendChild(o); }
+    sel.value = S.p;
+    const hint = $('levelHint'); hint.hidden = !cpu;
+    hint.textContent = S.level === 'expert' && !solvable ? L.hExpertBig : L['h' + S.level[0].toUpperCase() + S.level.slice(1)];
+  }
+  function changed(keepFirst) { tidy(); save(); score = [0, 0]; newGame(keepFirst === true); syncControls(); }
+  const LOCAL = location.protocol === 'file:' || /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  const inviteLink = () => location.href.split('#')[0] + '#j=' + S.code + '&l=' + S.lang + (S.name ? '&n=' + encodeURIComponent(S.name) : '');
+
+  /* ---------- the computer thinks in a background thread (same code runs here if that is unavailable) ---------- */
+  const ask = (() => {
+    let worker = null, seq = 0;
+    const waiting = new Map();
+    try {
+      const src = $('engine').textContent + '\nonmessage = e => postMessage({ id: e.data.id, out: Entropy.serve(e.data.q) });';
+      worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+      worker.onmessage = e => { const w = waiting.get(e.data.id); waiting.delete(e.data.id); if (w) w.done(e.data.out); };
+      worker.onerror = () => { worker = null; for (const w of waiting.values()) w.done(Entropy.serve(w.q)); waiting.clear(); };
+    } catch (err) { worker = null; }
+    // One request is out at a time; those still queued when a new game starts are dropped.
+    let queue = [], out = false;
+    const pump = () => {
+      if (out || !queue.length) return;
+      const job = queue.shift(); out = true;
+      const done = r => { out = false; job.done(r); pump(); };
+      if (!worker) { done(Entropy.serve(job.q)); return; }
+      waiting.set(++seq, { q: job.q, done });
+      worker.postMessage({ id: seq, q: job.q });
+    };
+    const f = q => new Promise(done => { queue.push({ q, done }); pump(); });
+    f.drop = () => { const old = queue; queue = []; for (const job of old) job.done(null); };
+    return f;
+  })();
+
+  /* ---------- game state ---------- */
+  let G = null, gen = 0, geo = null, solvable = true, score = [0, 0], cells = [], disc = 20;
+
+  function newGame(keepFirst) {
+    if (S.mode === 'net') { netNew(S.first === 'cpu' ? 1 : 0, [0, 0]); return; }   // online: a new series, both sides
+    const n = S.n, p = S.p;
+    // Against the computer, the first number changes hands at every game (once a game has actually been played).
+    if (keepFirst !== true && G && G.cpu === 1 && S.mode === 'cpu' && G.log.length) { S.first = S.first === 'you' ? 'cpu' : 'you'; save(); }
+    ask.drop();
+    geo = Entropy.geometry(n);
+    solvable = Entropy.brain(geo, n * n * p).exact;
+    const cpu = S.mode === 'cpu' ? 1 : -1;
+    const caller = cpu === 1 && S.first === 'cpu' ? 1 : 0;
+    G = {
+      gen: ++gen, n, p, cpu, level: S.level, first: caller,
+      board: new Array(n * n).fill(p), shown: new Array(n * n).fill(p),
+      caller, phase: 'call', m: null, sel: null, last: null, log: [], winner: -1, busy: false, slow: false
+    };
+    buildBoard();
+    // Expert, with the player to name first: start working the board out while the player thinks.
+    if (cpu === 1 && caller === 0 && S.level === 'expert' && solvable) ask({ op: 'calls', n, total: n * n * p, board: G.board.slice() });
+    step();
+  }
+  const coord = i => String.fromCharCode(97 + i % G.n) + (Math.floor(i / G.n) + 1);
+  // Online, player 0 is the host and player 1 the guest; each side sees itself as "You", in blue.
+  const oppName = () => GUEST ? GUEST.name : '';
+  const names = () => {
+    if (!G.net) return G.cpu < 0 ? L.names2 : L.names1;
+    const a = []; a[net.role] = L.names1[0]; a[1 - net.role] = oppName() || L.opp;
+    return a;
+  };
+  const who = i => G.net
+    ? { name: i === net.role ? L.names1[0] : esc(oppName() || L.oppSubj), cpu: false, you: i === net.role }
+    : { name: names()[i], cpu: i === G.cpu, you: G.cpu >= 0 && i !== G.cpu };
+  const tone = i => G.net ? (i === net.role ? 'A' : 'B') : (i ? 'B' : 'A');
+  const mine = i => G.net ? i === net.role : i !== G.cpu;
+  const actor = () => G.phase === 'call' ? G.caller : 1 - G.caller;
+  const humanActs = phase => G.phase === phase && !G.busy && mine(actor());
+
+  async function step() {
+    const my = G.gen;
+    render();
+    if (G.phase === 'over' || actor() !== G.cpu) return;      // a person decides: wait for a click
+    const q = { op: G.phase === 'call' ? 'call' : 'move', n: G.n, total: G.n * G.n * G.p, board: G.board.slice(), m: G.m, level: G.level };
+    const late = setTimeout(() => { if (my === G.gen) { G.slow = true; render(); } }, 1500);
+    const got = await Promise.all([ask(q), sleep(q.op === 'call' ? 700 : 550)]);
+    clearTimeout(late);
+    if (my !== G.gen) return;
+    G.slow = false;
+    if (q.op === 'call') doCall(got[0]); else doMove(got[0][0], got[0][1]);
+  }
+  function doCall(m, remote) {
+    if (!Entropy.canMove(geo, G.board, m)) return;
+    G.m = m; G.phase = 'move'; G.sel = null;
+    if (G.net) { if (remote) netSave(); else netPublish(false); }
+    step();
+  }
+  async function doMove(s, t, remote) {
+    const my = G.gen, m = G.m, mover = 1 - G.caller;
+    G.busy = true; G.sel = null;
+    G.board[s] -= m; G.board[t] += m;
+    G.last = { s, t, m, by: mover };
+    G.log.push({ caller: G.caller, m, s, t, won: G.board[s] === 0 });
+    G.shown[s] -= m;
+    render();
+    await fly(s, t, m);
+    if (my !== G.gen) return;
+    G.shown[t] += m;
+    if (G.board[s] === 0) { G.phase = 'over'; G.winner = mover; score[mover]++; }
+    else { G.caller = mover; G.phase = 'call'; G.m = null; }
+    G.busy = false;
+    if (G.net) { if (remote) netSave(); else netPublish(false); }
+    step();
+    if (G.net && !net.applying) netPending();
+  }
+  function clickCell(i) {
+    if (!humanActs('move')) return;
+    const mv = Entropy.legalMoves(geo, G.board, G.m);
+    const from = k => mv.some(x => x[0] === k);
+    if (G.sel !== null && mv.some(x => x[0] === G.sel && x[1] === i)) { doMove(G.sel, i); return; }
+    G.sel = (i !== G.sel && from(i)) ? i : null;
+    render();
+  }
+
+  /* ---------- online play ----------
+     The two browsers never talk to each other directly. Each one posts the whole game so far (a few dozen
+     characters) to a public message relay under a random, unguessable address, and listens there for the
+     other's posts. Every post is checked against the rules before it is believed; the longest legal game
+     wins, so lost or repeated posts do no harm and either side can leave and come back. */
+  const RELAY = 'https://ntfy.sh/entropy-';
+  const CH = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_';
+  const net = { on: false, run: 0, role: 0, code: '', k: 0, sc: [0, 0], es: null, timer: 0, live: false, down: false, synced: false,
+    lastId: '', seen: new Set(), pending: null, applying: false, outbox: null, sending: false, fail: 0, replied: 0, peer: false };
+  function randomCode() {
+    const a = new Uint8Array(20); crypto.getRandomValues(a);
+    return Array.from(a, x => 'abcdefghijkmnpqrstuvwxyz23456789'[x % 32]).join('');
+  }
+  // The game so far: who named first, then per turn the number and the two cells, e.g. "3ab2cd1".
+  function record() {
+    return { v: 1, r: net.role, k: net.k, n: G.n, p: G.p, f: G.first, sc: net.sc,
+      a: G.log.map(x => x.m + CH[x.s] + CH[x.t]).join('') + (G.phase === 'move' ? G.m : '') };
+  }
+  // Plays a record through the rules; null if anything in it is not a legal game.
+  function replay(rec) {
+    const int = (x, lo, hi) => Number.isInteger(x) && x >= lo && x <= hi;
+    if (!rec || rec.v !== 1 || !int(rec.k, 1, 1e9) || !int(rec.f, 0, 1) || !int(rec.n, 2, 8) || !int(rec.p, 1, 99)) return null;
+    if (!Array.isArray(rec.sc) || rec.sc.length !== 2 || !int(rec.sc[0], 0, 1e6) || !int(rec.sc[1], 0, 1e6)) return null;
+    if (typeof rec.a !== 'string' || rec.a.length > 3600) return null;
+    const g = Entropy.geometry(rec.n), b = new Array(rec.n * rec.n).fill(rec.p), log = [], a = rec.a;
+    let caller = rec.f, m = null, winner = -1, i = 0;
+    while (i < a.length) {
+      if (winner >= 0) return null;
+      m = +a[i++];
+      if (!int(m, 1, Entropy.MAXM) || !Entropy.canMove(g, b, m)) return null;
+      if (i === a.length) break;                                   // number named, stones not moved yet
+      const s = CH.indexOf(a[i]), t = i + 1 < a.length ? CH.indexOf(a[i + 1]) : -1;
+      if (s < 0 || t < 0 || !Entropy.legalMoves(g, b, m).some(x => x[0] === s && x[1] === t)) return null;
+      i += 2;
+      b[s] -= m; b[t] += m;
+      const won = b[s] === 0;
+      log.push({ caller, m, s, t, won });
+      if (won) winner = 1 - caller; else caller = 1 - caller;
+      m = null;
+    }
+    return { board: b, log, caller, m, winner, phase: winner >= 0 ? 'over' : m !== null ? 'move' : 'call' };
+  }
+  function blank(n, p, first, phase) {
+    ask.drop();
+    geo = Entropy.geometry(n); solvable = true;
+    G = { gen: ++gen, n, p, cpu: -1, net: true, level: 'random', first,
+      board: new Array(n * n).fill(p), shown: new Array(n * n).fill(p),
+      caller: first, phase, m: null, sel: null, last: null, log: [], winner: -1, busy: false, slow: false };
+    buildBoard();
+  }
+  function adopt(rec, st) {
+    net.k = rec.k; net.sc = rec.sc.slice();
+    blank(rec.n, rec.p, rec.f, st.phase);
+    Object.assign(G, { board: st.board.slice(), shown: st.board.slice(), caller: st.caller, m: st.m, log: st.log, winner: st.winner });
+    if (st.log.length) { const x = st.log[st.log.length - 1]; G.last = { s: x.s, t: x.t, m: x.m, by: 1 - x.caller }; }
+    score = rec.sc.slice(); if (st.winner >= 0) score[st.winner]++;
+    if (!GUEST) { S.n = rec.n; S.p = rec.p; S.first = rec.f ? 'cpu' : 'you'; }
+    netSave(); render(); syncControls();
+  }
+  // Starts the next online game here and tells the other side.
+  function netNew(first, sc) {
+    const n = GUEST ? G.n : S.n, p = GUEST ? G.p : S.p;
+    net.k = (net.k || 0) + 1; net.sc = sc.slice(); score = sc.slice();
+    blank(n, p, first, 'call');
+    if (!GUEST) S.first = first ? 'cpu' : 'you';
+    netPublish(false);
+    render();
+  }
+  function netSave() {
+    if (!G.net || G.phase === 'wait') return;
+    const str = JSON.stringify(record());
+    if (GUEST) { try { localStorage.setItem('entropy.guest.' + net.code, str); } catch (e) { /* private window */ } }
+    else { S.rec = str; save(); }
+  }
+  function netPublish(hello) {
+    if (!net.on || !G.net || G.phase === 'wait') return;
+    netSave();
+    const rec = record(); if (hello) rec.hi = 1;
+    netSend(rec);
+  }
+  function netSend(rec) { const str = JSON.stringify(rec); if (str.length > 3900) return; net.outbox = str; netFlush(); }
+  async function netFlush() {                       // only the newest state ever needs sending
+    if (net.sending || !net.outbox || !net.on) return;
+    const body = net.outbox, run = net.run;
+    net.sending = true;
+    let ok = false;
+    try { ok = (await fetch(RELAY + net.code, { method: 'POST', body })).ok; } catch (e) { ok = false; }
+    if (run !== net.run) return;
+    net.sending = false;
+    if (ok) { if (net.outbox === body) net.outbox = null; net.fail = 0; } else net.fail++;
+    showTrouble();
+    if (net.outbox) setTimeout(netFlush, ok ? 0 : Math.min(30000, 2000 * 2 ** Math.min(net.fail, 4)));
+  }
+  function netReply() {                             // the other side is behind: send what we have, but not in a loop
+    if (Date.now() - net.replied < 3000) return;
+    net.replied = Date.now();
+    netPublish(false);
+  }
+  function netReceive(rec, quiet) {
+    if (rec.r !== 0 && rec.r !== 1) return;
+    const theirs = rec.r !== net.role;
+    if (theirs && !net.peer) { net.peer = true; if (!GUEST && !S.peer) { S.peer = true; save(); } syncControls(); }
+    const greet = theirs && rec.hi === 1 && !quiet;                // the other side has just arrived
+    if (rec.k === undefined) { if (greet && net.k) netReply(); return; }
+    const st = replay(rec);
+    if (!st) return;
+    if (G.busy || net.applying) { net.pending = rec; return; }     // looked at again once the stones have landed
+    const have = net.k ? record() : null;
+    let take = false, grows = false;
+    if (!have || rec.k > have.k) take = true;
+    else if (rec.k === have.k) {
+      const same = rec.n === have.n && rec.p === have.p && rec.f === have.f && rec.sc[0] === have.sc[0] && rec.sc[1] === have.sc[1];
+      if (!same) take = net.role === 1 && rec.r === 0;             // the host's set-up wins
+      else if (rec.a.length > have.a.length) { take = true; grows = rec.a.startsWith(have.a); }
+      else if (rec.a.length === have.a.length && rec.a !== have.a) take = net.role === 1 && rec.r === 0;
+    }
+    if (!take) { if (greet && (rec.k < have.k || rec.a !== have.a)) netReply(); return; }
+    if (grows && !quiet && !document.hidden) extend(rec.a.slice(have.a.length)); else adopt(rec, st);
+  }
+  async function extend(tail) {                     // the other side's new number and move, shown as they happen
+    net.applying = true;
+    const my = G.gen;
+    let i = 0;
+    while (i < tail.length && my === G.gen) {
+      if (G.phase === 'call') doCall(+tail[i++], true);
+      else if (G.phase === 'move') { await doMove(CH.indexOf(tail[i]), CH.indexOf(tail[i + 1]), true); i += 2; }
+      else break;
+    }
+    net.applying = false;
+    netPending();
+  }
+  function netPending() { if (net.pending) { const rec = net.pending; net.pending = null; netReceive(rec, false); } }
+  function netEnvelope(json, quiet) {
+    let env, rec;
+    try { env = JSON.parse(json); } catch (e) { return; }
+    if (!env || env.event !== 'message' || typeof env.message !== 'string') return;
+    if (env.id) { if (net.seen.has(env.id)) return; net.seen.add(env.id); net.lastId = env.id; }
+    try { rec = JSON.parse(env.message); } catch (e) { return; }
+    if (rec && rec.v === 1) netReceive(rec, quiet);
+  }
+  async function netPoll(quiet) {                   // everything the relay still remembers (it keeps 12 hours)
+    const run = net.run;
+    try {
+      const r = await fetch(RELAY + net.code + '/json?poll=1&since=12h');
+      if (!r.ok) return false;
+      const text = await r.text();
+      if (run !== net.run) return false;
+      for (const line of text.split('\n')) if (line.trim()) netEnvelope(line, quiet);
+      return true;
+    } catch (e) { return false; }
+  }
+  function netListen() {
+    const run = net.run, es = new EventSource(RELAY + net.code + '/sse');
+    net.es = es;
+    es.onopen = () => { if (run !== net.run) return; net.live = true; net.down = false; showTrouble(); netPoll(false); };
+    es.onmessage = e => { if (run === net.run) netEnvelope(e.data, false); };
+    es.onerror = () => {
+      if (run !== net.run) return;
+      net.live = false;
+      setTimeout(() => { if (run === net.run && !net.live) { net.down = true; showTrouble(); } }, 6000);
+      if (es.readyState === 2) setTimeout(() => { if (run === net.run) netListen(); }, 8000);   // the browser gave up: start again
+    };
+  }
+  function netStop() {
+    net.run++; net.on = false; net.live = false; net.down = false;
+    if (net.es) { net.es.close(); net.es = null; }
+    clearInterval(net.timer);
+    showTrouble();
+  }
+  async function netStart(role, code) {
+    netStop();
+    Object.assign(net, { on: true, role, code, synced: false, lastId: '', seen: new Set(), pending: null, applying: false,
+      outbox: null, sending: false, fail: 0, replied: 0, peer: role === 0 && !!S.peer });
+    const run = net.run;
+    if (!(await netPoll(true)) && run === net.run) net.down = true;
+    if (run !== net.run) return;
+    net.synced = true;
+    netListen();
+    if (net.k) netPublish(true);                                   // say hello with what we know
+    else if (role === 0) netNew(S.first === 'cpu' ? 1 : 0, [0, 0]); // the host's very first online game
+    else netSend({ v: 1, r: 1, hi: 1 });                           // a guest who has nothing yet
+    render(); showTrouble();
+    net.timer = setInterval(() => { if (!document.hidden) netPoll(false); }, 45000);
+    setTimeout(() => { if (run === net.run) netPoll(false); }, 4000);
+  }
+  function netEnter() {                             // the host turns online play on (or comes back to it)
+    if (!S.code) { S.code = randomCode(); S.rec = ''; S.peer = false; save(); }
+    net.role = 0; net.k = 0; net.sc = [0, 0]; net.code = S.code;
+    let rec = null; try { rec = JSON.parse(S.rec); } catch (e) { rec = null; }
+    const st = replay(rec);
+    if (st) adopt(rec, st); else { blank(S.n, S.p, -1, 'wait'); render(); }
+    netStart(0, S.code);
+  }
+  function guestEnter() {
+    net.role = 1; net.k = 0; net.sc = [0, 0]; net.code = GUEST.code;
+    let rec = null; try { rec = JSON.parse(localStorage.getItem('entropy.guest.' + GUEST.code)); } catch (e) { rec = null; }
+    const st = replay(rec);
+    if (st) adopt(rec, st); else { blank(3, 5, -1, 'wait'); render(); }
+    netStart(1, GUEST.code);
+  }
+  function showTrouble() {
+    const el = $('trouble'), bad = net.on && net.synced && (net.down || net.fail >= 2);
+    el.hidden = !bad; el.textContent = bad ? L.netTrouble : '';
+  }
+
+  /* ---------- drawing ---------- */
+  function buildBoard() {
+    const el = $('board'), n = G.n;
+    $('boardBox').style.setProperty('--W', (n === 2 ? 380 : n === 3 ? 470 : n === 4 ? 540 : 620) + 'px');
+    el.style.setProperty('--n', n);
+    el.style.setProperty('--gap', (n <= 3 ? 10 : n <= 5 ? 7 : 4) + 'px');
+    el.textContent = ''; cells = [];
+    for (let i = 0; i < n * n; i++) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'cell';
+      b.innerHTML = '<span class="count"></span><span class="coord"></span><span class="stones"></span>';
+      b.addEventListener('click', () => clickCell(i));
+      el.appendChild(b);
+      cells.push({ el: b, count: b.children[0], coord: b.children[1], stones: b.children[2], n: -1 });
+      b.children[1].textContent = n <= 6 ? coord(i) : '';
+    }
+    $('fly').textContent = '';
+  }
+  // Largest disc such that c discs fit in a w × h box.
+  function fit(w, h, c) {
+    let best = 0;
+    for (let k = 1; k <= c; k++) {
+      for (const d of [w / k, h / k]) if (d > best && Math.floor(w / d + 1e-6) * Math.floor(h / d + 1e-6) >= c) best = d;
+      if (best >= Math.max(w, h) / (k + 1)) break;
+    }
+    return best;
+  }
+  function render() {
+    const two = G.cpu < 0, over = G.phase === 'over';
+    // players
+    for (let j = 0; j < 2; j++) {                   // online, your own chip comes first
+      const c = $('chip' + j), i = G.net ? (j ? 1 - net.role : net.role) : j;
+      c.innerHTML = esc(names()[i]) + ' <b>' + score[i] + '</b>';
+      c.classList.toggle('on', over ? G.winner === i : actor() === i);
+    }
+    document.title = (G.net && (G.phase === 'call' || G.phase === 'move') && actor() === net.role ? '● ' : '') + L.title;
+    $('board').classList.toggle('waiting', G.phase === 'wait');
+    $('status').innerHTML = statusText();
+    $('again').hidden = !over;
+    // number buttons
+    for (const btn of document.querySelectorAll('.num')) {
+      const m = +btn.dataset.m, can = !over && Entropy.canMove(geo, G.board, m);
+      let cls = 'num idle', title = '';
+      if (G.phase === 'move' || (over && G.last)) cls = 'num ' + (m === (over ? G.last.m : G.m) ? 'said' : 'idle');
+      else if (humanActs('call')) { cls = 'num ' + (can ? 'open' : 'shut'); if (!can) title = L.cannot(m); }
+      btn.className = cls; btn.title = title;
+      btn.disabled = !(cls === 'num open');
+    }
+    // cells
+    const pick = humanActs('move'), mv = pick ? Entropy.legalMoves(geo, G.board, G.m) : [];
+    const side = cells[0].el.clientWidth || 150, w = side * 0.82, h = side * 0.60;   // the stones box, see .cell .stones
+    const most = Math.max(2 * G.p, Math.max.apply(null, G.shown));
+    let d = Math.min(fit(w, h, most), 30, w / 3) * 0.999;
+    const plain = !(d >= 5);                       // too many stones to draw: show numbers only
+    if (plain) d = 5;
+    disc = d;
+    const el = $('board');
+    el.classList.toggle('plain', plain);
+    el.style.setProperty('--d', d.toFixed(2) + 'px');
+    el.style.setProperty('--pad', Math.max(0, (w - Math.floor(w / d + 1e-6) * d) / 2).toFixed(2) + 'px');
+    el.style.setProperty('--fs', clamp(side * (plain ? 0.34 : 0.17), 13, plain ? 54 : 30).toFixed(1) + 'px');
+    cells.forEach((c, i) => {
+      const k = G.shown[i];
+      if (c.n !== k) {
+        c.n = k; c.count.textContent = k;
+        if (!plain) c.stones.innerHTML = '<i></i>'.repeat(k);
+      }
+      if (plain) { if (c.stones.firstChild) c.stones.textContent = ''; c.n = -2 - k; }
+      let cls = 'cell', delta = '';
+      if (pick) {
+        if (G.sel === null) { if (mv.some(x => x[0] === i)) cls += ' can'; }
+        else if (i === G.sel) { cls += ' sel'; delta = '−' + G.m; }
+        else if (mv.some(x => x[0] === G.sel && x[1] === i)) { cls += ' tgt'; delta = '+' + G.m; }
+      }
+      if (over && !G.busy && G.board[i] === 0) cls += ' void';
+      c.el.className = cls; c.el.dataset.delta = delta;
+      c.el.setAttribute('aria-label', L.cell(coord(i), k));
+    });
+    drawArrow();
+    // log
+    const log = $('log');
+    log.innerHTML = G.log.map(x => '<li>' + L.logLine({ caller: x.caller, m: x.m, from: coord(x.s), to: coord(x.t), won: x.won }, who) + '</li>').join('');
+    log.scrollTop = log.scrollHeight;
+    analyse();
+  }
+  function statusText() {
+    const two = G.cpu < 0, nm = i => '<b class="p' + tone(i) + '">' + esc(names()[i]) + '</b>';
+    const line = t => '<span>' + t + '</span>', small = t => '<span class="how">' + t + '</span>';
+    if (G.net) {
+      const o = oppName() ? esc(oppName()) : '';
+      const oS = '<b class="pB">' + (o || L.oppSubj) + '</b>', oM = o ? '<b class="pB">' + o + '</b>' : L.oppMid;
+      if (G.phase === 'wait') return line(net.synced && GUEST ? L.netNoGame(oM) : L.netConnecting);
+      if (G.phase === 'over') { const c = coord(G.last.s); return line(G.winner === net.role ? L.youWin(c) : L.wins2(oS, c)); }
+      const myTurn = actor() === net.role, n = '<span class="m">' + G.m + '</span>';
+      if (G.phase === 'call') return line(myTurn ? L.netYourCall(oM) : L.netTheirCall(oS));
+      return myTurn ? line(L.netYourMove(oS, n)) + small(G.busy ? '&nbsp;' : G.sel === null ? L.pick1 : L.pick2) : line(L.netTheirMove(oM, n));
+    }
+    if (G.phase === 'over') {
+      const c = coord(G.last.s);
+      return line(two ? L.wins2(nm(G.winner), c) : G.winner === G.cpu ? L.cpuWins(c) : L.youWin(c));
+    }
+    const caller = G.caller, mover = 1 - caller, wait = G.slow ? small(L.wait) : '';
+    if (G.phase === 'call') {
+      if (two) return line(L.call2(nm(caller), nm(mover)));
+      return caller === G.cpu ? line(L.cpuCalls) + wait : line(L.yourCall);
+    }
+    const badge = '<span class="m">' + G.m + '</span>';
+    const how = small(G.busy ? '&nbsp;' : G.sel === null ? L.pick1 : L.pick2);
+    if (two) return line(L.move2(nm(mover), badge, G.m)) + how;
+    return mover === G.cpu ? line(L.cpuMoves(badge)) + wait : line(L.yourMove(badge)) + how;
+  }
+  function centre(i) { const e = cells[i].el; return [e.offsetLeft + e.offsetWidth / 2, e.offsetTop + e.offsetHeight / 2]; }
+  function drawArrow() {
+    const svg = $('arrow');
+    if (!G.last || G.busy) { svg.innerHTML = ''; return; }
+    const a = centre(G.last.s), b = centre(G.last.t), at = f => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f];
+    const p = at(0.3), q = at(0.68), mid = at(0.47);
+    svg.setAttribute('class', 'by' + tone(G.last.by));
+    svg.innerHTML =
+      '<defs><marker id="head" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>' +
+      '<line x1="' + p[0] + '" y1="' + p[1] + '" x2="' + q[0] + '" y2="' + q[1] + '" stroke="currentColor" stroke-width="5" stroke-linecap="round" marker-end="url(#head)"/>' +
+      '<circle cx="' + mid[0] + '" cy="' + mid[1] + '" r="11" fill="currentColor"/>' +
+      '<text x="' + mid[0] + '" y="' + mid[1] + '" text-anchor="middle" dominant-baseline="central">' + G.last.m + '</text>';
+  }
+  async function fly(s, t, m) {
+    const layer = $('fly');
+    if (reduced || !layer.animate || $('board').classList.contains('plain')) { await sleep(160); return; }
+    const box = $('boardBox').getBoundingClientRect(), a = cells[s].stones.getBoundingClientRect(), b = cells[t].stones.getBoundingClientRect();
+    const k = Math.min(m, 12), dx = b.left - a.left, dy = b.top - a.top, done = [];
+    for (let i = 0; i < k; i++) {
+      const el = document.createElement('i');
+      el.style.width = el.style.height = disc + 'px';
+      el.style.setProperty('--d', disc + 'px');
+      el.style.left = (a.left - box.left + a.width / 2 - disc / 2 + (i - (k - 1) / 2) * disc * 0.7) + 'px';
+      el.style.top = (a.top - box.top + a.height / 2 - disc / 2) + 'px';
+      layer.appendChild(el);
+      const an = el.animate([{ transform: 'translate(0,0)' }, { transform: 'translate(' + dx + 'px,' + dy + 'px)' }],
+        { duration: 430, delay: i * 70, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'both' });
+      done.push(an.finished.catch(() => {}));
+    }
+    await Promise.race([Promise.all(done), sleep(430 + k * 70 + 300)]);
+    layer.textContent = '';
+  }
+
+  /* ---------- developer's mode: what the solver thinks ---------- */
+  let analysed = '';
+  function analyse() {
+    const out = $('analysis'), on = S.dev && S.hints && !G.net;
+    out.hidden = !on;
+    if (!on) { analysed = ''; return; }
+    const stamp = G.gen + '/' + G.log.length + '/' + G.phase + '/' + G.busy + '/' + S.lang;
+    if (stamp === analysed) return;
+    analysed = stamp;
+    if (G.phase === 'over' || G.busy) { out.textContent = ''; return; }
+    out.textContent = L.sThinking;
+    const my = G.gen, phase = G.phase;
+    ask({ op: phase === 'call' ? 'calls' : 'moves', n: G.n, total: G.n * G.n * G.p, board: G.board.slice(), m: G.m }).then(r => {
+      if (my !== G.gen || stamp !== analysed) return;
+      if (!r) { out.textContent = L.sNone; return; }
+      const tail = r.exact ? '' : L.sTail(r.depth);
+      if (phase === 'call') { out.textContent = L.sCalls(r.opts) + tail; return; }
+      const win = r.opts.filter(o => o.v > 0), lose = r.opts.filter(o => o.v < 0);
+      const list = a => a.map(o => coord(o.s) + '→' + coord(o.t)).join(', ');
+      out.textContent = L.sMoves(r.opts.length, list(win), list(lose), r.opts.length - win.length - lose.length) + tail;
+    });
+  }
+
+  /* ---------- input ---------- */
+  $('calls').addEventListener('click', e => {
+    const btn = e.target.closest('button[data-m]');
+    if (btn && humanActs('call')) doCall(+btn.dataset.m);
+  });
+  document.addEventListener('keydown', e => {
+    if (e.target.matches('input, select') || e.metaKey || e.ctrlKey || e.altKey) return;
+    if ('123'.includes(e.key) && e.key.length === 1 && humanActs('call')) doCall(+e.key);
+    if (e.key === 'Escape' && G.sel !== null) { G.sel = null; render(); }
+  });
+  for (const seg of document.querySelectorAll('.seg')) seg.addEventListener('change', e => {
+    const key = seg.dataset.key, was = S.mode; S[key] = key === 'n' ? +e.target.value : e.target.value;
+    if (key === 'n') S.p = Math.min(S.p, limits().pMax);
+    if (key === 'mode' && S.mode === 'net') { tidy(); save(); score = [0, 0]; netEnter(); syncControls(); return; }   // picks the online game up where it was
+    if (key === 'mode' && was === 'net') netStop();
+    changed(key === 'first');                      // choosing who names first applies to the game it starts
+  });
+  $('selP').addEventListener('change', e => { S.p = +e.target.value; changed(); });
+  $('devN').addEventListener('change', e => { S.n = +e.target.value; changed(); });
+  $('devP').addEventListener('change', e => { S.p = +e.target.value; changed(); });
+  $('dev').addEventListener('change', e => { S.dev = e.target.checked; changed(); });
+  $('hints').addEventListener('change', e => { S.hints = e.target.checked; save(); render(); });
+  // Play again: the next game of the series. Scores stay and the first number changes hands.
+  $('again').addEventListener('click', () => {
+    if (G.net) { if (G.phase === 'over') netNew(1 - G.first, score); } else newGame();
+    syncControls();
+  });
+  // New game: everything back to the start. Scores at zero and you name the first number.
+  $('new').addEventListener('click', () => {
+    if (GUEST) return;
+    score = [0, 0]; S.first = 'you'; save();
+    newGame(true);
+    syncControls();
+  });
+  $('lang').addEventListener('click', () => {
+    S.lang = S.lang === 'en' ? 'fr' : 'en'; save();
+    if (GUEST) { try { localStorage.setItem('entropy.guest.lang', S.lang); } catch (e) { /* private window */ } }
+    applyLang(); syncControls(); render(); showTrouble();
+  });
+  $('copy').addEventListener('click', async () => {
+    const box = $('link'); let ok = false;
+    try { await navigator.clipboard.writeText(box.value); ok = true; }
+    catch (e) { box.select(); try { ok = document.execCommand('copy'); } catch (e2) { ok = false; } }
+    if (ok) { $('copy').textContent = L.copied; setTimeout(() => { $('copy').textContent = L.copy; }, 1600); }
+  });
+  $('link').addEventListener('focus', e => e.target.select());
+  $('myName').addEventListener('input', e => { S.name = e.target.value.trim().slice(0, 20); save(); $('link').value = inviteLink(); });
+  window.addEventListener('hashchange', () => location.reload());
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && net.on) netPoll(false); });
+  let lastSide = 0;
+  const resized = () => {
+    const side = cells.length ? cells[0].el.clientWidth : 0;
+    if (G && side && side !== lastSide) { lastSide = side; cells.forEach(c => { c.n = -1; }); render(); }
+  };
+  window.addEventListener('resize', resized);
+  if (window.ResizeObserver) new ResizeObserver(resized).observe($('board'));
+
+  tidy();
+  if (GUEST) {
+    let own = ''; try { own = localStorage.getItem('entropy.guest.lang') || ''; } catch (e) { own = ''; }
+    S.lang = ['en', 'fr'].includes(own) ? own : ['en', 'fr'].includes(GUEST.lang) ? GUEST.lang : S.lang;
+    S.mode = 'net';
+    document.querySelector('.rules').open = true;
+  }
+  applyLang();
+  if (GUEST) guestEnter(); else if (S.mode === 'net') netEnter(); else newGame();
+  syncControls();
+  window.entropyGame = { get state() { return G; }, get net() { return net; }, settings: S, restart: changed };
+})();
+</script>
+</body>
+</html>
