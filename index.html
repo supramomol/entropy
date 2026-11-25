@@ -26,7 +26,7 @@ html { -webkit-text-size-adjust: 100%; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 main { max-width: 620px; margin: 0 auto; padding: 22px 16px 56px; }
 header { display: flex; align-items: baseline; gap: 6px 14px; flex-wrap: wrap; margin-bottom: 14px; }
-h1 { font-size: 30px; line-height: 1; margin: 0; letter-spacing: .01em; }
+h1 { font-size: 27px; line-height: 1; margin: 0; letter-spacing: .02em; color: #fff; background: linear-gradient(180deg, #3d7ded, #2358c8); padding: 8px 15px 9px; border-radius: 13px; box-shadow: 0 1px 2px rgba(0,0,0,.18), 0 4px 12px rgba(35,88,200,.25); }
 header p { margin: 0; color: var(--muted); font-size: 14.5px; order: 3; flex: 1 1 100%; }
 .top { order: 2; margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .lang { font: inherit; font-size: 13px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 3px 12px; cursor: pointer; }
@@ -66,6 +66,7 @@ input[type=number] { width: 64px; }
 .guest .setup, .guest #new { display: none; }
 #trouble { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--b); }
 #board.waiting { opacity: .35; }
+#fx { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20; }
 @supports not (aspect-ratio: 1) { .cell::before { content: ""; display: block; padding-top: 100%; } }
 .cell, .num, .btn, .lang, .seg label { touch-action: manipulation; }
 
@@ -127,7 +128,7 @@ summary { cursor: pointer; font-weight: 600; font-size: 14.5px; }
 .rules li { margin: 4px 0; }
 /* ---------- phones ---------- */
 @media (max-width: 520px) {
-  h1 { font-size: 27px; }
+  h1 { font-size: 22px; padding: 6px 11px 7px; border-radius: 11px; }
   .turn { grid-template-columns: 1fr; }
   #status { min-height: 0; }
   #calls { gap: 10px; margin-top: 2px; }
@@ -245,6 +246,7 @@ summary { cursor: pointer; font-weight: 600; font-size: 14.5px; }
   </aside>
   </div>
 </main>
+<canvas id="fx" hidden aria-hidden="true"></canvas>
 
 <script id="engine">
 /* Entropy: rules and computer players. No DOM in this block. */
@@ -867,6 +869,7 @@ const Entropy = (() => {
     G.busy = false;
     if (G.net) { if (remote) netSave(); else netPublish(false); }
     step();
+    if (G.phase === 'over') celebrate();
     if (G.net && !net.applying) netPending();
   }
   function clickCell(i) {
@@ -929,6 +932,7 @@ const Entropy = (() => {
     buildBoard();
   }
   function adopt(rec, st) {
+    const live = !!G && G.net && net.k === rec.k && (G.phase === 'call' || G.phase === 'move');   // we were in this very game
     net.k = rec.k; net.sc = rec.sc.slice();
     blank(rec.n, rec.p, rec.f, st.phase);
     Object.assign(G, { board: st.board.slice(), shown: st.board.slice(), caller: st.caller, m: st.m, log: st.log, winner: st.winner });
@@ -936,6 +940,7 @@ const Entropy = (() => {
     score = rec.sc.slice(); if (st.winner >= 0) score[st.winner]++;
     if (!GUEST) { S.n = rec.n; S.p = rec.p; S.first = rec.f ? 'cpu' : 'you'; }
     netSave(); render(); syncControls();
+    if (live && st.winner >= 0) celebrate();        // it ended while this page was not showing the moves
   }
   // Starts the next online game here and tells the other side.
   function netNew(first, sc) {
@@ -1100,6 +1105,7 @@ const Entropy = (() => {
       b.children[1].textContent = n <= 6 ? coord(i) : '';
     }
     $('fly').textContent = '';
+    fx.stop();
   }
   // Largest disc such that c discs fit in a w × h box.
   function fit(w, h, c) {
@@ -1250,6 +1256,131 @@ const Entropy = (() => {
     });
   }
 
+  /* ---------- fireworks for the winner, clouds and rain for the loser ---------- */
+  const fx = (() => {
+    const cv = $('fx'), ctx = cv.getContext && cv.getContext('2d'), rnd = (a, b) => a + Math.random() * (b - a);
+    const LASTS = { fireworks: 6500, rain: 7500 };          // milliseconds
+    let raf = 0, kind = '', t0 = 0, last = 0, W = 0, H = 0, due = 0, dark = false;
+    let rockets = [], sparks = [], flashes = [], drops = [], clouds = [];
+    function resize() {
+      if (!kind) return;
+      const r = window.devicePixelRatio || 1;
+      W = window.innerWidth; H = window.innerHeight;
+      cv.width = Math.round(W * r); cv.height = Math.round(H * r);
+      ctx.setTransform(r, 0, 0, r, 0, 0);
+    }
+    function stop() {
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0; kind = ''; cv.hidden = true;
+    }
+    function start(k) {
+      stop();
+      if (reduced || !ctx) return;                           // no animation for people who asked for none
+      kind = k; cv.hidden = false; resize();
+      t0 = 0; due = 0; rockets = []; sparks = []; flashes = []; drops = []; clouds = [];
+      dark = !!(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+      if (k === 'rain') {
+        const band = Math.min(96, H * 0.14);
+        for (let x = -40; x < W + 80; x += rnd(58, 100)) clouds.push({ x, y: band * rnd(0.18, 0.42), r: rnd(28, 46), sway: rnd(0, 6.28), back: Math.random() < 0.4 });
+        const n = Math.round(Math.max(90, Math.min(340, W / 3)));
+        for (let i = 0; i < n; i++) drops.push({ x: rnd(-60, W + 60), y: rnd(band * 0.5, H), v: rnd(520, 900), len: rnd(10, 19) });
+      }
+      raf = requestAnimationFrame(frame);
+    }
+    function frame(now) {
+      if (!kind) return;
+      if (!t0) { t0 = now; last = now; }                     // the clock starts once the page is really on screen
+      const t = now - t0, dt = Math.min(0.05, (now - last) / 1000), total = LASTS[kind];
+      last = now;
+      const fade = Math.max(0, Math.min(1, t / 400, (total - t) / 900));
+      ctx.clearRect(0, 0, W, H);
+      if (kind === 'fireworks') fireworks(t, dt, fade, total); else rain(t, dt, fade);
+      if (t < total) raf = requestAnimationFrame(frame); else stop();
+    }
+    function fireworks(t, dt, fade, total) {
+      const big = Math.max(0.8, Math.min(1.6, Math.min(W, H) / 600));
+      ctx.fillStyle = 'rgba(8,12,30,' + (0.45 * fade).toFixed(3) + ')';      // a touch of night behind the sparks
+      ctx.fillRect(0, 0, W, H);
+      if (t >= due && t < total - 2000) {
+        due = t + rnd(260, 520);
+        const top = rnd(H * 0.12, H * 0.45);
+        rockets.push({ x: rnd(W * 0.12, W * 0.88), y: H + 8, vx: rnd(-25, 25), vy: -Math.sqrt(2 * 700 * (H + 8 - top)), hue: rnd(0, 360) });
+      }
+      ctx.lineCap = 'round';
+      for (let i = rockets.length - 1; i >= 0; i--) {
+        const r = rockets[i];
+        r.vy += 700 * dt; r.x += r.vx * dt; r.y += r.vy * dt;
+        ctx.strokeStyle = 'hsla(' + r.hue.toFixed(0) + ',100%,82%,' + fade.toFixed(3) + ')'; ctx.lineWidth = 2.2;
+        ctx.beginPath(); ctx.moveTo(r.x, r.y); ctx.lineTo(r.x - r.vx * 0.04, r.y - r.vy * 0.04); ctx.stroke();
+        if (r.vy > -60) {                                    // top of its climb: it bursts
+          rockets.splice(i, 1);
+          const n = Math.round(Math.max(48, Math.min(110, W * H / 8000)));
+          flashes.push({ x: r.x, y: r.y, age: 0, hue: r.hue });
+          const second = Math.random() < 0.35 ? (r.hue + rnd(90, 180)) % 360 : r.hue;
+          for (let k = 0; k < n; k++) {
+            const a = rnd(0, 6.283), v = rnd(40, 250) * big;
+            sparks.push({ x: r.x, y: r.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: rnd(0.9, 1.7), age: 0, hue: k % 2 ? r.hue : second });
+          }
+        }
+      }
+      const drag = Math.pow(0.12, dt);                       // air slows the sparks, gravity pulls them down
+      for (let i = flashes.length - 1; i >= 0; i--) {
+        const f = flashes[i];
+        f.age += dt;
+        if (f.age >= 0.28) { flashes.splice(i, 1); continue; }
+        ctx.fillStyle = 'hsla(' + f.hue.toFixed(0) + ',100%,88%,' + ((1 - f.age / 0.28) * 0.55 * fade).toFixed(3) + ')';
+        ctx.beginPath(); ctx.arc(f.x, f.y, 26 * big * (0.5 + f.age / 0.28), 0, 6.283); ctx.fill();
+      }
+      for (let i = sparks.length - 1; i >= 0; i--) {
+        const q = sparks[i];
+        q.age += dt;
+        if (q.age >= q.life) { sparks.splice(i, 1); continue; }
+        q.vx *= drag; q.vy = q.vy * drag + 130 * dt;
+        const px = q.x, py = q.y;
+        q.x += q.vx * dt; q.y += q.vy * dt;
+        const a = (1 - q.age / q.life) * fade, h = q.hue.toFixed(0), tx = px - q.vx * 0.035, ty = py - q.vy * 0.035;
+        ctx.strokeStyle = 'hsla(' + h + ',100%,60%,' + (a * 0.32).toFixed(3) + ')'; ctx.lineWidth = 7;      // glow
+        ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(q.x, q.y); ctx.stroke();
+        ctx.strokeStyle = 'hsla(' + h + ',100%,72%,' + a.toFixed(3) + ')'; ctx.lineWidth = 2.8;             // spark
+        ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(q.x, q.y); ctx.stroke();
+      }
+    }
+    function rain(t, dt, fade) {
+      const band = Math.min(96, H * 0.14), lift = (1 - fade) * (band + 80);   // the clouds slide in from above and leave the same way
+      ctx.fillStyle = 'rgba(52,62,84,' + (0.24 * fade).toFixed(3) + ')';       // a grey day
+      ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = (dark ? 'rgba(175,205,245,' : 'rgba(52,88,150,') + (0.6 * fade).toFixed(3) + ')';
+      ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+      ctx.beginPath();
+      for (const d of drops) {
+        d.y += d.v * dt; d.x -= d.v * 0.12 * dt;
+        if (d.y > H + 20) { d.y = band * rnd(0.4, 0.8); d.x = rnd(-20, W + 80); }
+        ctx.moveTo(d.x, d.y); ctx.lineTo(d.x + d.len * 0.12, d.y - d.len);
+      }
+      ctx.stroke();
+      for (const back of [true, false]) {
+        ctx.fillStyle = back ? (dark ? '#59616f' : '#a7afbc') : (dark ? '#737c8c' : '#808999');
+        ctx.beginPath();
+        for (const c of clouds) if (c.back === back) {
+          const x = c.x + Math.sin(t / 1400 + c.sway) * 7, y = c.y - lift;
+          ctx.moveTo(x + c.r, y); ctx.arc(x, y, c.r, 0, 6.283);
+          ctx.moveTo(x + c.r * 1.25, y + c.r * 0.25); ctx.arc(x + c.r * 0.6, y + c.r * 0.25, c.r * 0.65, 0, 6.283);
+          ctx.moveTo(x - c.r * 0.1, y + c.r * 0.3); ctx.arc(x - c.r * 0.7, y + c.r * 0.3, c.r * 0.6, 0, 6.283);
+        }
+        ctx.fill();
+      }
+      ctx.fillStyle = dark ? '#737c8c' : '#808999';          // solid sky above the cloud tops
+      ctx.fillRect(0, -lift - 10, W, band * 0.25 + 10);
+    }
+    return { start, stop, resize };
+  })();
+  // The player who emptied a cell gets fireworks, the other one clouds and rain. Two players on one screen share the fireworks.
+  function celebrate() {
+    if (G.phase !== 'over') return;
+    const won = G.net ? G.winner === net.role : G.cpu < 0 || G.winner !== G.cpu;
+    fx.start(won ? 'fireworks' : 'rain');
+  }
+
   /* ---------- input ---------- */
   $('calls').addEventListener('click', e => {
     const btn = e.target.closest('button[data-m]');
@@ -1305,6 +1436,7 @@ const Entropy = (() => {
     if (G && side && side !== lastSide) { lastSide = side; cells.forEach(c => { c.n = -1; }); render(); }
   };
   window.addEventListener('resize', resized);
+  window.addEventListener('resize', fx.resize);
   if (window.ResizeObserver) new ResizeObserver(resized).observe($('board'));
 
   tidy();
@@ -1317,7 +1449,7 @@ const Entropy = (() => {
   applyLang();
   if (GUEST) guestEnter(); else if (S.mode === 'net') netEnter(); else newGame();
   syncControls();
-  window.entropyGame = { get state() { return G; }, get net() { return net; }, settings: S, restart: changed };
+  window.entropyGame = { get state() { return G; }, get net() { return net; }, settings: S, restart: changed, fx };
 })();
 </script>
 </body>
