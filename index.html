@@ -126,6 +126,18 @@ summary { cursor: pointer; font-weight: 600; font-size: 14.5px; }
 #log b { color: var(--ink); font-weight: 600; }
 .rules ol { margin: 8px 0 0; padding-left: 1.4em; font-size: 14.5px; }
 .rules li { margin: 4px 0; }
+
+/* ---------- chances of winning ---------- */
+.odds { padding: 10px 0 0; }
+.oddsRow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; font-size: 13.5px; }
+.oddsRow > span:last-child { margin-left: auto; }
+.oddsRow b { font-size: 17px; font-variant-numeric: tabular-nums; }
+.oddsBar { position: relative; height: 12px; margin: 11px 12px 13px; border-radius: 999px; background: var(--b); }
+.oddsBar .fill { position: absolute; top: 0; left: 0; height: 100%; width: 50%; border-radius: 999px 0 0 999px; background: var(--a); transition: width .6s cubic-bezier(.4,0,.2,1); }
+.oddsBar::after { content: ""; position: absolute; top: 0; left: 50%; width: 2px; height: 100%; margin-left: -1px; background: var(--card); opacity: .85; }
+.oddsBar .knob { position: absolute; z-index: 1; top: 50%; left: 50%; width: 24px; height: 24px; margin: -12px 0 0 -12px; border-radius: 50%; background: var(--card); border: 2px solid var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: left .6s cubic-bezier(.4,0,.2,1); }
+@media (prefers-reduced-motion: reduce) { .oddsBar .fill, .oddsBar .knob { transition: none; } }
+
 /* ---------- phones ---------- */
 @media (max-width: 520px) {
   h1 { font-size: 22px; padding: 6px 11px 7px; border-radius: 11px; }
@@ -229,6 +241,14 @@ summary { cursor: pointer; font-weight: 600; font-size: 14.5px; }
     </div>
   </section>
 
+  <details id="odds">
+    <summary data-t="chances">Chances of winning</summary>
+    <div class="odds">
+      <div class="oddsRow"><span class="pA"><span id="oddsN0"></span> <b id="oddsP0"></b></span><span class="pB"><b id="oddsP1"></b> <span id="oddsN1"></span></span></div>
+      <div class="oddsBar" id="oddsBar" role="img"><span class="fill" id="oddsFill"></span><span class="knob" id="oddsKnob"></span></div>
+      <p class="hint" data-t="chancesHow">An estimate from the position on the board, for two evenly matched players.</p>
+    </div>
+  </details>
   <details open>
     <summary data-t="moves">Moves</summary>
     <ol id="log"></ol>
@@ -572,7 +592,63 @@ const Entropy = (() => {
     return served.analyseMoves(q.board, q.m);
   }
 
-  return { MAXM, cfg, geometry, legalMoves, canMove, brain, serve };
+  // Chances of winning. The game is finished many times over from the position given, by two players who
+  // both play the way "Beginner" does: empty a cell when they can, otherwise avoid letting the other one
+  // do it, otherwise anything. The answer is the share of those games won by the player about to act
+  // (m = 0: about to name a number; m > 0: about to move m stones). The dice are seeded from the position,
+  // so one position always gives one answer, on every screen.
+  function chances(g, board, m, games) {
+    const N = g.N, E = g.E, es = g.es, et = g.et;
+    let total = 0, seed = 2166136261 ^ m;
+    for (let i = 0; i < N; i++) { total += board[i]; seed = Math.imul(seed ^ board[i], 16777619); }
+    games = games || Math.max(300, Math.min(4000, Math.round(4.4e6 / (total * E))));   // fewer on very large boards
+    const rnd = () => {
+      seed = (seed + 0x6D2B79F5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const b = new Int32Array(N), pick = new Int32Array(E);
+    // The numbers that can be named on b without letting the other player empty a cell at once (bit k for k).
+    const safe = () => {
+      let most = 0, bad = 0;
+      for (let e = 0; e < E; e++) { const s = b[es[e]]; if (b[et[e]] >= s) { if (s > most) most = s; if (s <= MAXM) bad |= 1 << s; } }
+      let ok = 0;
+      for (let k = 1; k <= MAXM && k <= most; k++) if (!(bad & (1 << k))) ok |= 1 << k;
+      return ok;
+    };
+    let won = 0;
+    for (let i = 0; i < games; i++) {
+      for (let j = 0; j < N; j++) b[j] = board[j];
+      let me = true, k = m;                          // me: the player we are asked about is the one to act
+      for (;;) {
+        if (!k) {                                    // name a number
+          const ok = safe();
+          if (!ok) { me = !me; break; }              // every number hands the game over
+          do k = 1 + Math.floor(rnd() * MAXM); while (!(ok & (1 << k)));
+          me = !me;
+        } else {                                     // move k stones
+          let cnt = 0, win = false;
+          for (let e = 0; e < E; e++) { const s = b[es[e]]; if (s >= k && b[et[e]] >= s) { if (s === k) { win = true; break; } pick[cnt++] = e; } }
+          if (win) break;
+          if (!cnt) { me = !me; break; }
+          let left = cnt, done = false;              // moves are tried in random order until one leaves a safe number
+          while (left && !done) {
+            const j = Math.floor(rnd() * left), c = pick[j];
+            b[es[c]] -= k; b[et[c]] += k;
+            if (safe()) done = true;
+            else { b[es[c]] += k; b[et[c]] -= k; pick[j] = pick[--left]; pick[left] = c; }
+          }
+          if (!done) { const c = pick[Math.floor(rnd() * cnt)]; b[es[c]] -= k; b[et[c]] += k; }
+          k = 0;
+        }
+      }
+      if (me) won++;
+    }
+    return won / games;
+  }
+
+  return { MAXM, cfg, geometry, legalMoves, canMove, brain, serve, chances };
 })();
 </script>
 
@@ -595,7 +671,7 @@ const Entropy = (() => {
   /* ---------- settings ---------- */
   const KEY = 'entropy.settings.v1';
   const S = Object.assign({ mode: 'cpu', level: 'beginner', first: 'you', n: 2, p: 5, dev: false, hints: false,
-    lang: /^fr/i.test(navigator.language || '') ? 'fr' : 'en', code: '', name: '', rec: '', peer: false }, load());
+    lang: /^fr/i.test(navigator.language || '') ? 'fr' : 'en', code: '', name: '', rec: '', peer: false, chances: false }, load());
   // The game used to open on 3 x 3. Settings saved in those days move to the new 2 x 2 start once;
   // a board chosen after that is remembered as usual.
   if (!S.start2) { S.n = 2; S.start2 = true; }
@@ -641,6 +717,7 @@ const Entropy = (() => {
       first: 'First number named by', you: 'You', theCpu: 'Computer', firstHint: 'Switches at every game.',
       board: 'Board', stonesPer: 'Stones per cell', newGame: 'New game', dev: "Developer's mode", verdicts: 'Show solver verdicts',
       again: 'Play again', moves: 'Moves', rules: 'Rules', setup: 'Game setup', numbers: 'Number of stones to move', size: 'Board size n',
+      chances: 'Chances of winning', chancesHow: 'An estimate from the position on the board, for two evenly matched players.', pct: v => v + '%',
       rule1: 'Every cell of the board starts with the same number of stones.',
       rule2: 'One player names a number: 1, 2 or 3. It has to be a number of stones that can actually be moved.',
       rule3: 'The other player moves exactly that many stones from one cell to a cell next to it (up, down, left or right). The cell receiving the stones must hold at least as many stones as the cell giving them.',
@@ -696,6 +773,7 @@ const Entropy = (() => {
       first: 'Premier nombre annoncé par', you: 'Vous', theCpu: 'L\u2019ordinateur', firstHint: 'Alterne à chaque partie.',
       board: 'Plateau', stonesPer: 'Pierres par case', newGame: 'Nouvelle partie', dev: 'Mode développeur', verdicts: 'Afficher les verdicts du solveur',
       again: 'Rejouer', moves: 'Coups', rules: 'Règles', setup: 'Réglages de la partie', numbers: 'Nombre de pierres à déplacer', size: 'Taille n du plateau',
+      chances: 'Chances de gagner', chancesHow: 'Une estimation d’après la position sur le plateau, pour deux joueurs de même force.', pct: v => v + ' %',
       rule1: 'Au départ, chaque case du plateau contient le même nombre de pierres.',
       rule2: 'Un joueur annonce un nombre\u00a0: 1, 2 ou 3. Ce doit être un nombre de pierres qu\u2019il est réellement possible de déplacer.',
       rule3: 'L\u2019autre joueur déplace exactement ce nombre de pierres d\u2019une case vers une case voisine (en haut, en bas, à gauche ou à droite). La case qui reçoit les pierres doit en contenir au moins autant que la case qui les donne.',
@@ -1175,7 +1253,31 @@ const Entropy = (() => {
     const log = $('log');
     log.innerHTML = G.log.map(x => '<li>' + L.logLine({ caller: x.caller, m: x.m, from: coord(x.s), to: coord(x.t), won: x.won }, who) + '</li>').join('');
     log.scrollTop = log.scrollHeight;
+    showChances();
     analyse();
+  }
+  // The chances panel (closed unless the player opens it). Nothing is worked out while it is closed.
+  // The figures are what Entropy.chances gives for the position, from the very first number on.
+  let chancesStamp = '';
+  function showChances() {
+    if (!$('odds').open) { chancesStamp = ''; return; }
+    if (G.busy) return;                             // stones in the air: wait until they have landed
+    const left = G.net ? net.role : 0, right = 1 - left;   // online, your own side comes first, as in the scores
+    const nm = names(), stamp = [G.gen, G.log.length, G.phase, G.m, S.lang, nm[0], nm[1]].join('/');
+    if (stamp === chancesStamp) return;
+    chancesStamp = stamp;
+    let p = 0.5;                                    // chance of the player on the left (online, no game yet: no figure)
+    if (G.phase === 'over') p = G.winner === left ? 1 : 0;
+    else if (G.phase === 'move' || G.phase === 'call') {
+      const share = Entropy.chances(geo, G.board, G.phase === 'move' ? G.m : 0);
+      p = actor() === left ? share : 1 - share;
+    }
+    let pc = Math.round(p * 100);
+    if (p > 0 && p < 1) pc = clamp(pc, 1, 99);      // 0 and 100 are kept for certainties
+    $('oddsN0').textContent = nm[left]; $('oddsN1').textContent = nm[right];
+    $('oddsP0').textContent = L.pct(pc); $('oddsP1').textContent = L.pct(100 - pc);
+    $('oddsFill').style.width = $('oddsKnob').style.left = pc + '%';
+    $('oddsBar').setAttribute('aria-label', nm[left] + ' ' + L.pct(pc) + ', ' + nm[right] + ' ' + L.pct(100 - pc));
   }
   function statusText() {
     const two = G.cpu < 0, nm = i => '<b class="p' + tone(i) + '">' + esc(names()[i]) + '</b>';
@@ -1429,6 +1531,13 @@ const Entropy = (() => {
     catch (e) { box.select(); try { ok = document.execCommand('copy'); } catch (e2) { ok = false; } }
     if (ok) { $('copy').textContent = L.copied; setTimeout(() => { $('copy').textContent = L.copy; }, 1600); }
   });
+  // The chances panel stays the way the player left it, open or closed.
+  $('odds').addEventListener('toggle', e => {
+    const open = e.target.open;
+    if (GUEST) { try { localStorage.setItem('entropy.guest.chances', open ? '1' : ''); } catch (err) { /* private window */ } }
+    else if (!!S.chances !== open) { S.chances = open; save(); }
+    if (G) showChances();
+  });
   $('link').addEventListener('focus', e => e.target.select());
   $('myName').addEventListener('input', e => { S.name = e.target.value.trim().slice(0, 20); save(); $('link').value = inviteLink(); });
   window.addEventListener('hashchange', () => location.reload());
@@ -1448,7 +1557,9 @@ const Entropy = (() => {
     S.lang = ['en', 'fr'].includes(own) ? own : ['en', 'fr'].includes(GUEST.lang) ? GUEST.lang : S.lang;
     S.mode = 'net';
     document.querySelector('.rules').open = true;
+    try { S.chances = localStorage.getItem('entropy.guest.chances') === '1'; } catch (e) { S.chances = false; }
   }
+  $('odds').open = !!S.chances;
   applyLang();
   if (GUEST) guestEnter(); else if (S.mode === 'net') netEnter(); else newGame();
   syncControls();
